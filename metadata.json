@@ -1,0 +1,5 @@
+{
+  "name": "VolcEngine API Playground",
+  "description": "A visual playground for testing VolcEngine (火山引擎) APIs with dynamic parameter configuration, real-time JSON preview, and visual response rendering (Images/Video).",
+  "requestFramePermissions": []
+}

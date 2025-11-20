@@ -1,0 +1,656 @@
+
+import React, { useState, useEffect, useRef } from 'react';
+import Sidebar from './components/Sidebar';
+import RequestPanel from './components/RequestPanel';
+import ResponsePanel from './components/ResponsePanel';
+import SettingsModal from './components/SettingsModal';
+import ServiceSettingsModal from './components/ServiceSettingsModal';
+import ImportSummaryModal, { ImportSummaryData } from './components/ImportSummaryModal';
+import { ApiService, Credentials, ResponseData, ServiceGroup } from './types';
+import { signRequest } from './services/volcSigner';
+
+const DEFAULT_GROUP_ID = 'g_default';
+const DEFAULT_SERVICE_ID = 's_default_1';
+const DEFAULT_IMGBB_KEY = 'c529a7eb097753d11cb28e5d64a212af';
+
+const DEFAULT_GROUPS: ServiceGroup[] = [
+    { id: DEFAULT_GROUP_ID, name: 'Image Services', collapsed: false }
+];
+
+const DEFAULT_SERVICES: ApiService[] = [
+  {
+    id: DEFAULT_SERVICE_ID,
+    groupId: DEFAULT_GROUP_ID,
+    name: 'General 3.0 Text-to-Image',
+    serviceName: 'cv',
+    description: 'HighAesSmartDrawing',
+    action: 'HighAesSmartDrawing',
+    version: '2022-08-31',
+    endpoint: 'https://visual.volcengineapi.com',
+    region: 'cn-north-1',
+    method: 'POST',
+    docUrl: 'https://www.volcengine.com/docs/85128/1526761',
+    params: [
+      { id: 'p1', key: 'req_key', value: 'high_aes_general_v30l_zt2i', type: 'string', description: 'Algorithm name, fixed value' },
+      { id: 'p2', key: 'prompt', value: 'A majestic cyberpunk city with neon lights, rainy streets, cinematic lighting', type: 'string', description: 'Prompt for image generation' },
+      { id: 'p3', key: 'use_pre_llm', value: true, type: 'boolean', description: 'Enable prompt enhancement' },
+      { id: 'p4', key: 'scale', value: 2.5, type: 'float', description: 'Guidance scale [1-10]' },
+      { id: 'p5', key: 'seed', value: -1, type: 'integer', description: 'Random seed, -1 for random' },
+      { id: 'p6', key: 'width', value: 1024, type: 'integer', description: 'Image width' },
+      { id: 'p7', key: 'height', value: 1024, type: 'integer', description: 'Image height' },
+      { id: 'p8', key: 'return_url', value: true, type: 'boolean' },
+    ],
+  }
+];
+
+// Helper to get value from nested object using string path like "data.task_id"
+const getValueByPath = (obj: any, path: string) => {
+    return path.split('.').reduce((acc, part) => acc && acc[part], obj);
+};
+
+const App: React.FC = () => {
+  const [groups, setGroups] = useState<ServiceGroup[]>(DEFAULT_GROUPS);
+  const [services, setServices] = useState<ApiService[]>(DEFAULT_SERVICES);
+  const [selectedServiceId, setSelectedServiceId] = useState<string>(DEFAULT_SERVICES[0].id);
+  
+  const [credentials, setCredentials] = useState<Credentials>({
+    accessKeyId: '',
+    secretAccessKey: '',
+  });
+  const [proxyUrl, setProxyUrl] = useState('');
+  const [imgbbKey, setImgbbKey] = useState(DEFAULT_IMGBB_KEY);
+  
+  // Modal States
+  const [showSettings, setShowSettings] = useState(false);
+  const [showServiceSettings, setShowServiceSettings] = useState<string | null>(null);
+  const [importSummary, setImportSummary] = useState<ImportSummaryData | null>(null);
+  
+  const [loading, setLoading] = useState(false);
+  const [responseData, setResponseData] = useState<ResponseData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Layout State
+  const [sidebarWidth, setSidebarWidth] = useState(280);
+  const [requestPanelWidth, setRequestPanelWidth] = useState(450);
+  const [isResizing, setIsResizing] = useState<'sidebar' | 'request' | null>(null);
+
+  // Load from local storage on mount
+  useEffect(() => {
+    const storedCreds = localStorage.getItem('volc_playground_creds');
+    if (storedCreds) {
+      try { setCredentials(JSON.parse(storedCreds)); } catch(e){}
+    }
+    const storedProxy = localStorage.getItem('volc_playground_proxy');
+    if (storedProxy) setProxyUrl(storedProxy);
+
+    const storedImgbb = localStorage.getItem('volc_playground_imgbb');
+    if (storedImgbb) setImgbbKey(storedImgbb);
+    
+    const storedConfig = localStorage.getItem('volc_playground_config');
+    if (storedConfig) {
+        try {
+            const config = JSON.parse(storedConfig);
+            if (config.groups && config.services) {
+                setGroups(config.groups);
+                setServices(config.services);
+                // Select first service if available
+                if (config.services.length > 0) {
+                    setSelectedServiceId(config.services[0].id);
+                }
+            }
+        } catch(e){}
+    }
+  }, []);
+
+  // Auto-save config
+  useEffect(() => {
+      const config = { groups, services };
+      localStorage.setItem('volc_playground_config', JSON.stringify(config));
+  }, [groups, services]);
+
+  // --- Resizing Logic ---
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return;
+      
+      if (isResizing === 'sidebar') {
+        const newWidth = Math.max(200, Math.min(500, e.clientX));
+        setSidebarWidth(newWidth);
+      } else if (isResizing === 'request') {
+        const offset = e.clientX - sidebarWidth;
+        const maxW = window.innerWidth - sidebarWidth - 300; 
+        const newWidth = Math.max(300, Math.min(maxW, offset));
+        setRequestPanelWidth(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(null);
+      document.body.style.cursor = 'default';
+      document.body.style.userSelect = 'auto';
+    };
+
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing, sidebarWidth]);
+
+
+  const handleSaveCredentials = (creds: Credentials) => {
+    setCredentials(creds);
+    localStorage.setItem('volc_playground_creds', JSON.stringify(creds));
+  };
+
+  const handleSaveProxy = (url: string) => {
+      setProxyUrl(url);
+      localStorage.setItem('volc_playground_proxy', url);
+  };
+
+  const handleSaveImgbbKey = (key: string) => {
+      setImgbbKey(key);
+      localStorage.setItem('volc_playground_imgbb', key);
+  };
+
+  // -- Data Manipulation Handlers --
+  const handleAddGroup = () => {
+    const newGroup: ServiceGroup = { id: `g_${Date.now()}`, name: 'New Group', collapsed: false };
+    setGroups([...groups, newGroup]);
+  };
+
+  const handleRenameGroup = (id: string, name: string) => {
+    setGroups(groups.map(g => g.id === id ? { ...g, name } : g));
+  };
+
+  const handleDeleteGroup = (id: string) => {
+      setGroups(groups.filter(g => g.id !== id));
+      const newServices = services.filter(s => s.groupId !== id);
+      setServices(newServices);
+      if (selectedServiceId && services.find(s => s.id === selectedServiceId)?.groupId === id) {
+          if (newServices.length > 0) setSelectedServiceId(newServices[0].id);
+          else setSelectedServiceId('');
+      }
+  };
+
+  const handleToggleGroup = (id: string) => {
+      setGroups(groups.map(g => g.id === id ? { ...g, collapsed: !g.collapsed } : g));
+  };
+
+  const handleAddService = (groupId: string) => {
+    const newService: ApiService = {
+      ...DEFAULT_SERVICES[0],
+      id: `s_${Date.now()}`,
+      groupId,
+      name: 'New Service',
+      params: DEFAULT_SERVICES[0].params.map(p => ({...p, id: `p_${Date.now()}_${Math.random()}`}))
+    };
+    setServices([...services, newService]);
+    setSelectedServiceId(newService.id);
+  };
+
+  const handleDeleteService = (id: string) => {
+    const newServices = services.filter(s => s.id !== id);
+    setServices(newServices);
+    if (selectedServiceId === id) {
+        const deletedService = services.find(s => s.id === id);
+        const groupServices = newServices.filter(s => s.groupId === deletedService?.groupId);
+        if (groupServices.length > 0) {
+            setSelectedServiceId(groupServices[0].id);
+        } else if (newServices.length > 0) {
+            setSelectedServiceId(newServices[0].id);
+        } else {
+            setSelectedServiceId('');
+        }
+    }
+  };
+
+  const handleUpdateService = (updated: ApiService) => {
+    setServices(services.map(s => s.id === updated.id ? updated : s));
+  };
+
+  const handleMoveService = (serviceId: string, targetGroupId: string) => {
+      setServices(services.map(s => s.id === serviceId ? { ...s, groupId: targetGroupId } : s));
+  };
+
+  const handleReorderService = (sourceId: string, targetId: string, position: 'before' | 'after') => {
+    const sourceIndex = services.findIndex(s => s.id === sourceId);
+    if (sourceIndex === -1) return;
+    const newServices = [...services];
+    const [moved] = newServices.splice(sourceIndex, 1);
+    const targetIndex = newServices.findIndex(s => s.id === targetId);
+    if (targetIndex === -1) {
+        newServices.push(moved);
+    } else {
+        const insertIndex = position === 'before' ? targetIndex : targetIndex + 1;
+        const targetService = services.find(s => s.id === targetId);
+        if (targetService && moved.groupId !== targetService.groupId) {
+            moved.groupId = targetService.groupId;
+        }
+        newServices.splice(insertIndex, 0, moved);
+    }
+    setServices(newServices);
+  };
+
+  const handleReorderGroup = (sourceId: string, targetId: string, position: 'before' | 'after') => {
+    const sourceIndex = groups.findIndex(g => g.id === sourceId);
+    if (sourceIndex === -1) return;
+    const newGroups = [...groups];
+    const [moved] = newGroups.splice(sourceIndex, 1);
+    const targetIndex = newGroups.findIndex(g => g.id === targetId);
+    if (targetIndex === -1) {
+        newGroups.push(moved);
+    } else {
+        const insertIndex = position === 'before' ? targetIndex : targetIndex + 1;
+        newGroups.splice(insertIndex, 0, moved);
+    }
+    setGroups(newGroups);
+  };
+
+  // -- Import / Export --
+  const handleExportConfig = (includeCredentials: boolean) => {
+    const config: any = { groups, services, version: 1 };
+    if (includeCredentials) {
+        config.credentials = credentials;
+    }
+    const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `volc_playground_config_${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportConfig = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const content = e.target?.result as string;
+            const config = JSON.parse(content);
+            if (Array.isArray(config.groups) && Array.isArray(config.services)) {
+                setGroups(config.groups);
+                setServices(config.services);
+                let hasCreds = false;
+                if (config.credentials && config.credentials.accessKeyId) {
+                    setCredentials(config.credentials);
+                    localStorage.setItem('volc_playground_creds', JSON.stringify(config.credentials));
+                    hasCreds = true;
+                }
+                if (config.services.length > 0) {
+                    setSelectedServiceId(config.services[0].id);
+                }
+                setImportSummary({
+                    serviceCount: config.services.length,
+                    groupCount: config.groups.length,
+                    hasCredentials: hasCreds,
+                    serviceNames: config.services.map((s: ApiService) => s.name)
+                });
+                setShowSettings(false);
+            } else {
+                alert('Invalid configuration format');
+            }
+        } catch (err) {
+            alert('Failed to parse configuration file');
+        }
+    };
+    reader.readAsText(file);
+  };
+
+  // -- HTTP Logic --
+
+  const makeRequest = async (service: ApiService, action: string, version: string, method: string, payload: any, signal?: AbortSignal) => {
+      const queryParams = {
+        Action: action,
+        Version: version,
+      };
+
+      const bodyString = JSON.stringify(payload);
+
+      const signatureHeaders = signRequest({
+        method: method,
+        pathname: '/', 
+        params: queryParams,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: bodyString,
+        region: service.region,
+        serviceName: service.serviceName,
+        accessKeyId: credentials.accessKeyId,
+        secretAccessKey: credentials.secretAccessKey,
+        sessionToken: credentials.sessionToken,
+      });
+
+      let fetchUrl = service.endpoint;
+      if (proxyUrl) {
+        fetchUrl = `${proxyUrl}${service.endpoint}`;
+      }
+
+      const url = new URL(fetchUrl);
+      Object.entries(queryParams).forEach(([k, v]) => url.searchParams.append(k, v));
+
+      return fetch(url.toString(), {
+        method: method,
+        headers: signatureHeaders,
+        body: bodyString,
+        signal: signal,
+      });
+  };
+
+  const selectedService = services.find(s => s.id === selectedServiceId);
+
+  const handleStopRequest = () => {
+      if (abortControllerRef.current) {
+          abortControllerRef.current.abort();
+          abortControllerRef.current = null;
+      }
+      setLoading(false);
+      setResponseData(prev => prev ? { ...prev, isPolling: false } : null);
+  };
+
+  const handleSendRequest = async () => {
+    if (!selectedService) return;
+    if (!credentials.accessKeyId || !credentials.secretAccessKey) {
+      setShowSettings(true);
+      return;
+    }
+
+    // --- VALIDATION START ---
+    const pendingImages = selectedService.params.filter(p => p.type === 'image' && (!p.value || String(p.value).trim() === ''));
+    if (pendingImages.length > 0) {
+        alert(`Parameter "${pendingImages[0].key}" has an image selected but not converted. Please click "To URL" or "To Base64" before running the request.`);
+        return;
+    }
+    // --- VALIDATION END ---
+
+    if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+    }
+    
+    // Create a local controller for this specific request session
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    setLoading(true);
+    setError(null);
+    setResponseData(null);
+    const startTime = Date.now();
+
+    try {
+      const payload: Record<string, any> = {};
+      selectedService.params.forEach(p => {
+         if (p.type === 'json' && typeof p.value === 'string') {
+            try { payload[p.key] = JSON.parse(p.value); } catch { payload[p.key] = p.value; }
+         } else {
+             let val = p.value;
+             
+             // Special handling for Image type: 
+             // If value looks like a JSON array string (from multiple image uploads), parse it back to array
+             if (p.type === 'image' && typeof val === 'string') {
+                 try {
+                     const parsed = JSON.parse(val);
+                     if (Array.isArray(parsed)) val = parsed;
+                 } catch {}
+             }
+
+             // Auto-wrap image_urls and binary_data_base64 if they are SINGLE strings
+             if ((p.key === 'image_urls' || p.key === 'binary_data_base64') && typeof val === 'string') {
+                 val = [val];
+             }
+             payload[p.key] = val;
+         }
+      });
+
+      const res = await makeRequest(
+          selectedService, 
+          selectedService.action, 
+          selectedService.version, 
+          selectedService.method, 
+          payload,
+          controller.signal // Pass signal explicitly
+      );
+
+      const data = await res.json();
+      const duration = Date.now() - startTime;
+      
+      setResponseData({
+        status: res.status,
+        statusText: res.statusText,
+        headers: {}, 
+        body: data,
+        timestamp: duration,
+        isPolling: false
+      });
+
+      if (!res.ok) {
+          throw new Error(data?.ResponseMetadata?.Error?.Message || `HTTP Error ${res.status}`);
+      }
+
+      if (selectedService.asyncConfig?.enabled) {
+          const config = selectedService.asyncConfig;
+          const taskId = getValueByPath(data, config.submitResponseIdPath);
+          
+          if (!taskId) {
+              throw new Error(`Async enabled, but could not find ID at '${config.submitResponseIdPath}' in response.`);
+          }
+
+          setResponseData(prev => prev ? { ...prev, isPolling: true } : null);
+          
+          const maxDuration = (config.timeoutSeconds || 120) * 1000;
+          const pollStartTime = Date.now();
+
+          const pollLoop = async () => {
+              // Check timeout
+              if (Date.now() - pollStartTime > maxDuration) {
+                  setError(`Polling timed out after ${config.timeoutSeconds || 120} seconds.`);
+                  setLoading(false);
+                  setResponseData(prev => prev ? { ...prev, isPolling: false } : null);
+                  return;
+              }
+
+              // Check cancellation using the local controller variable
+              if (controller.signal.aborted) {
+                  return;
+              }
+
+              await new Promise(resolve => setTimeout(resolve, config.pollInterval));
+              
+              // Check cancellation again after wait
+              if (controller.signal.aborted) {
+                  return;
+              }
+
+              try {
+                  const pollPayload: Record<string, any> = {
+                      [config.pollIdParamKey]: taskId
+                  };
+                  
+                  // Inherit Params
+                  if (config.inheritParams) {
+                      Object.assign(pollPayload, payload);
+                  }
+
+                  // Static Params from JSON
+                  if (config.staticParamsJson) {
+                      try {
+                          const staticParams = JSON.parse(config.staticParamsJson);
+                          Object.assign(pollPayload, staticParams);
+                      } catch (e) {
+                          console.error("Failed to parse staticParamsJson", e);
+                      }
+                  }
+
+                  const pollRes = await makeRequest(
+                      selectedService,
+                      config.pollAction,
+                      config.pollVersion,
+                      config.pollMethod,
+                      pollPayload,
+                      controller.signal // Pass signal explicitly
+                  );
+
+                  const pollData = await pollRes.json();
+                  const pollDuration = Date.now() - startTime;
+                  const status = getValueByPath(pollData, config.pollStatusPath);
+
+                  setResponseData({
+                      status: pollRes.status,
+                      statusText: pollRes.statusText,
+                      headers: {},
+                      body: pollData,
+                      timestamp: pollDuration,
+                      isPolling: true
+                  });
+
+                  if (status === config.pollSuccessValue) {
+                      setLoading(false);
+                      setResponseData(prev => prev ? { ...prev, isPolling: false } : null);
+                  } else if (config.pollFailedValue && status === config.pollFailedValue) {
+                      let errorMsg = `Async Task Failed: Status '${status}'`;
+                      if (config.pollErrorPath) {
+                          const extractedErr = getValueByPath(pollData, config.pollErrorPath);
+                          if (extractedErr) errorMsg += `: ${extractedErr}`;
+                      }
+                      setError(errorMsg);
+                      setLoading(false);
+                      setResponseData(prev => prev ? { ...prev, isPolling: false } : null);
+                  } else {
+                      pollLoop();
+                  }
+
+              } catch (err: any) {
+                  if (err.name === 'AbortError') return;
+                  console.error("Polling Error", err);
+                  setError(`Polling Error: ${err.message}`);
+                  setLoading(false);
+                  setResponseData(prev => prev ? { ...prev, isPolling: false } : null);
+              }
+          };
+          
+          pollLoop();
+      } else {
+          setLoading(false);
+      }
+
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+          console.log('Request Aborted');
+          return;
+      }
+      console.error(err);
+      let msg = err.message;
+      if (msg === 'Failed to fetch') {
+          msg = 'Network Error: Failed to fetch. This is likely a CORS issue. Please configure a Proxy in Settings (Gear Icon -> Network) or ensure the endpoint supports CORS.';
+      }
+      setError(msg);
+      setLoading(false);
+      setResponseData(prev => prev ? { ...prev, isPolling: false } : null);
+    }
+  };
+
+  return (
+    <div className="flex h-screen w-full bg-white text-slate-900 overflow-hidden">
+      {/* Sidebar Area */}
+      <div 
+        style={{ width: sidebarWidth }} 
+        className="flex-shrink-0 relative h-full"
+      >
+        <Sidebar
+            groups={groups}
+            services={services}
+            selectedId={selectedServiceId}
+            onSelect={setSelectedServiceId}
+            onAddService={handleAddService}
+            onAddGroup={handleAddGroup}
+            onDeleteService={handleDeleteService}
+            onDeleteGroup={handleDeleteGroup}
+            onOpenGlobalSettings={() => setShowSettings(true)}
+            onOpenServiceSettings={(id) => setShowServiceSettings(id)}
+            onToggleGroup={handleToggleGroup}
+            onRenameGroup={handleRenameGroup}
+            onMoveService={handleMoveService}
+            onReorderService={handleReorderService}
+            onReorderGroup={handleReorderGroup}
+        />
+        <div 
+            className="absolute right-[-3px] top-0 w-[6px] h-full cursor-col-resize hover:bg-indigo-500 transition-colors z-50 opacity-0 hover:opacity-100"
+            onMouseDown={(e) => { e.preventDefault(); setIsResizing('sidebar'); }}
+        />
+      </div>
+      
+      {/* Main Content Area */}
+      <div className="flex-1 flex overflow-hidden">
+        {selectedService ? (
+            <>
+                <div 
+                    style={{ width: requestPanelWidth }} 
+                    className="border-r border-gray-200 h-full flex flex-col min-w-[300px] flex-shrink-0 relative"
+                >
+                    <RequestPanel
+                        service={selectedService}
+                        onUpdateService={handleUpdateService}
+                        onSend={handleSendRequest}
+                        onStop={handleStopRequest}
+                        loading={loading}
+                        imgbbApiKey={imgbbKey}
+                    />
+                    <div 
+                        className="absolute right-[-3px] top-0 w-[6px] h-full cursor-col-resize hover:bg-indigo-500 transition-colors z-50 opacity-0 hover:opacity-100"
+                        onMouseDown={(e) => { e.preventDefault(); setIsResizing('request'); }}
+                    />
+                </div>
+
+                <div className="flex-1 h-full flex flex-col min-w-[300px]">
+                    <ResponsePanel
+                        response={responseData}
+                        error={error}
+                    />
+                </div>
+            </>
+        ) : (
+            <div className="flex-1 flex items-center justify-center bg-gray-50 text-gray-400">
+                Select or create a service to start
+            </div>
+        )}
+      </div>
+
+      <SettingsModal
+        isOpen={showSettings}
+        onClose={() => setShowSettings(false)}
+        credentials={credentials}
+        onSave={handleSaveCredentials}
+        onExportConfig={handleExportConfig}
+        onImportConfig={handleImportConfig}
+        proxyUrl={proxyUrl}
+        onSaveProxy={handleSaveProxy}
+        imgbbKey={imgbbKey}
+        onSaveImgbbKey={handleSaveImgbbKey}
+      />
+
+      <ServiceSettingsModal
+        isOpen={!!showServiceSettings}
+        onClose={() => setShowServiceSettings(null)}
+        service={services.find(s => s.id === showServiceSettings) || null}
+        groups={groups}
+        onSave={handleUpdateService}
+        onDelete={handleDeleteService}
+      />
+
+      <ImportSummaryModal 
+        isOpen={!!importSummary}
+        onClose={() => setImportSummary(null)}
+        summary={importSummary}
+      />
+    </div>
+  );
+};
+
+export default App;
