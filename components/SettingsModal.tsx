@@ -154,17 +154,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                 placeholder="e.g. T0RRN..."
                             />
                             </div>
-
-                            <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Session Token (Optional)</label>
-                            <input
-                                type="password"
-                                value={form.sessionToken || ''}
-                                onChange={(e) => setForm({ ...form, sessionToken: e.target.value })}
-                                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm transition-shadow font-mono"
-                                placeholder="Optional STS Token"
-                            />
-                            </div>
                         </div>
                     </div>
                     
@@ -217,10 +206,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                     value={imgbbForm}
                                     onChange={(e) => setImgbbForm(e.target.value)}
                                     className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm transition-shadow font-mono"
-                                    placeholder="Default Key Loaded"
+                                    placeholder="Leave empty to use built-in key"
                                 />
                                 <div className="mt-1 text-xs text-gray-400">
-                                    Required for "Image" type parameters to upload to ImgBB. Leave blank to use default.
+                                    Required for "Image" type parameters to upload to ImgBB. Leave blank to use default.Images uploaded using the default API (if left blank) will be deleted after 30 minutes.
                                 </div>
                             </div>
                         </div>

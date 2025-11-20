@@ -6,12 +6,12 @@ import ResponsePanel from './components/ResponsePanel';
 import SettingsModal from './components/SettingsModal';
 import ServiceSettingsModal from './components/ServiceSettingsModal';
 import ImportSummaryModal, { ImportSummaryData } from './components/ImportSummaryModal';
+import ConfirmDialog from './components/ConfirmDialog';
 import { ApiService, Credentials, ResponseData, ServiceGroup } from './types';
 import { signRequest } from './services/volcSigner';
 
 const DEFAULT_GROUP_ID = 'g_default';
 const DEFAULT_SERVICE_ID = 's_default_1';
-const DEFAULT_IMGBB_KEY = 'c529a7eb097753d11cb28e5d64a212af';
 
 const DEFAULT_GROUPS: ServiceGroup[] = [
     { id: DEFAULT_GROUP_ID, name: 'Image Services', collapsed: false }
@@ -48,6 +48,17 @@ const getValueByPath = (obj: any, path: string) => {
     return path.split('.').reduce((acc, part) => acc && acc[part], obj);
 };
 
+// Simple string hash for change detection
+const simpleHash = (str: string) => {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; 
+  }
+  return hash.toString();
+};
+
 const App: React.FC = () => {
   const [groups, setGroups] = useState<ServiceGroup[]>(DEFAULT_GROUPS);
   const [services, setServices] = useState<ApiService[]>(DEFAULT_SERVICES);
@@ -58,12 +69,14 @@ const App: React.FC = () => {
     secretAccessKey: '',
   });
   const [proxyUrl, setProxyUrl] = useState('');
-  const [imgbbKey, setImgbbKey] = useState(DEFAULT_IMGBB_KEY);
+  const [imgbbKey, setImgbbKey] = useState('');
   
   // Modal States
   const [showSettings, setShowSettings] = useState(false);
   const [showServiceSettings, setShowServiceSettings] = useState<string | null>(null);
   const [importSummary, setImportSummary] = useState<ImportSummaryData | null>(null);
+  const [showUpdatePrompt, setShowUpdatePrompt] = useState(false);
+  const [pendingConfig, setPendingConfig] = useState<any | null>(null);
   
   const [loading, setLoading] = useState(false);
   const [responseData, setResponseData] = useState<ResponseData | null>(null);
@@ -103,11 +116,89 @@ const App: React.FC = () => {
     }
   }, []);
 
+  // Check for default.json and handle updates
+  useEffect(() => {
+    const checkDefaultConfig = async () => {
+      try {
+        const res = await fetch('./default.json');
+        if (!res.ok) return;
+        
+        const configText = await res.text();
+        const currentHash = simpleHash(configText);
+        const lastHash = localStorage.getItem('volc_playground_default_hash');
+        
+        // If we've already seen this exact version of default.json (accepted or rejected), do nothing
+        if (currentHash === lastHash) return;
+
+        const config = JSON.parse(configText);
+        if (!config.groups || !config.services) return;
+
+        const hasLocalConfig = localStorage.getItem('volc_playground_config');
+
+        // If no local config, apply default.json immediately (First run)
+        if (!hasLocalConfig) {
+           applyConfig(config);
+           localStorage.setItem('volc_playground_default_hash', currentHash);
+           return;
+        }
+
+        // If local config exists but a new default.json is detected, prompt user
+        setPendingConfig({ config, hash: currentHash });
+        setShowUpdatePrompt(true);
+
+      } catch (e) {
+        console.error("Failed to check default.json", e);
+      }
+    };
+
+    checkDefaultConfig();
+  }, []);
+
   // Auto-save config
   useEffect(() => {
       const config = { groups, services };
       localStorage.setItem('volc_playground_config', JSON.stringify(config));
   }, [groups, services]);
+
+  const applyConfig = (config: any) => {
+      if (config.groups) setGroups(config.groups);
+      if (config.services) {
+          setServices(config.services);
+          if (config.services.length > 0) {
+              setSelectedServiceId(config.services[0].id);
+          }
+      }
+      if (config.credentials) {
+          setCredentials(config.credentials);
+          localStorage.setItem('volc_playground_creds', JSON.stringify(config.credentials));
+      }
+  };
+
+  const handleConfirmUpdate = () => {
+      if (pendingConfig) {
+          applyConfig(pendingConfig.config);
+          localStorage.setItem('volc_playground_default_hash', pendingConfig.hash);
+          setShowUpdatePrompt(false);
+          
+          // Show summary of what changed
+          setImportSummary({
+              serviceCount: pendingConfig.config.services.length,
+              groupCount: pendingConfig.config.groups.length,
+              hasCredentials: !!pendingConfig.config.credentials,
+              serviceNames: pendingConfig.config.services.map((s: any) => s.name)
+          });
+          setPendingConfig(null);
+      }
+  };
+
+  const handleCancelUpdate = () => {
+      if (pendingConfig) {
+          // Mark this hash as seen so we don't prompt again for this specific update
+          localStorage.setItem('volc_playground_default_hash', pendingConfig.hash);
+          setShowUpdatePrompt(false);
+          setPendingConfig(null);
+      }
+  };
 
   // --- Resizing Logic ---
   useEffect(() => {
@@ -276,17 +367,13 @@ const App: React.FC = () => {
             const content = e.target?.result as string;
             const config = JSON.parse(content);
             if (Array.isArray(config.groups) && Array.isArray(config.services)) {
-                setGroups(config.groups);
-                setServices(config.services);
+                applyConfig(config);
+                
                 let hasCreds = false;
                 if (config.credentials && config.credentials.accessKeyId) {
-                    setCredentials(config.credentials);
-                    localStorage.setItem('volc_playground_creds', JSON.stringify(config.credentials));
                     hasCreds = true;
                 }
-                if (config.services.length > 0) {
-                    setSelectedServiceId(config.services[0].id);
-                }
+
                 setImportSummary({
                     serviceCount: config.services.length,
                     groupCount: config.groups.length,
@@ -326,7 +413,6 @@ const App: React.FC = () => {
         serviceName: service.serviceName,
         accessKeyId: credentials.accessKeyId,
         secretAccessKey: credentials.secretAccessKey,
-        sessionToken: credentials.sessionToken,
       });
 
       let fetchUrl = service.endpoint;
@@ -648,6 +734,14 @@ const App: React.FC = () => {
         isOpen={!!importSummary}
         onClose={() => setImportSummary(null)}
         summary={importSummary}
+      />
+
+      <ConfirmDialog 
+        isOpen={showUpdatePrompt}
+        title="Configuration Update Found"
+        message="There is the latest archive file, do you want to update?"
+        onConfirm={handleConfirmUpdate}
+        onCancel={handleCancelUpdate}
       />
     </div>
   );
