@@ -77,7 +77,7 @@ const translations = {
       networkImages: "Network & Files",
       dataStorage: "Data & Storage",
       language: "Language / 语言",
-      contactInfo: "VolcEngine - Web Design - Intelligent App",
+      contactInfo: "VolcEngine Intelligent VisionAi Api-DemoGround",
       
       // Credentials
       volcCredentials: "VolcEngine Credentials",
@@ -292,7 +292,7 @@ const translations = {
       networkImages: "网络与文件",
       dataStorage: "数据与存储",
       language: "Language / 语言",
-      contactInfo: "火山引擎 - 官网设计 - 智能应用 API 体验Demo",
+      contactInfo: "火山引擎 - 智能视觉 - API 体验 Demo",
       
       // Credentials
       volcCredentials: "VolcEngine 凭证",
@@ -329,7 +329,7 @@ const translations = {
       apiEndpoint: "API Endpoint",
       hostEndpoint: "Host / Endpoint",
       region: "Region",
-      serviceName: "Service",
+      serviceName: "Service Name",
       version: "Version",
       action: "Action",
       documentation: "文档",

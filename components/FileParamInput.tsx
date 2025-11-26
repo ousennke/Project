@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Upload, Link as LinkIcon, X, Loader2, FileCode, Check, AlertCircle, Plus, FileText } from 'lucide-react';
 import { useLanguage } from '../i18n';
 
@@ -43,6 +42,9 @@ const FileParamInput: React.FC<FileParamInputProps> = ({
 }) => {
   const { t } = useLanguage();
   
+  // Track previous output to prevent infinite loops
+  const prevOutputRef = useRef<string | undefined>(undefined);
+
   // Parse initial value into internal items state
   const [items, setItems] = useState<FileItem[]>(() => {
       let initialValues: string[] = [];
@@ -99,12 +101,19 @@ const FileParamInput: React.FC<FileParamInputProps> = ({
           .filter(i => i.value !== '' && !i.error) 
           .map(i => i.value);
       
+      let nextValue = '';
       if (validValues.length === 0) {
-          onChange('');
+          nextValue = '';
       } else if (validValues.length === 1) {
-          onChange(validValues[0]);
+          nextValue = validValues[0];
       } else {
-          onChange(JSON.stringify(validValues));
+          nextValue = JSON.stringify(validValues);
+      }
+
+      // Prevent infinite loops: only call onChange if the value actually changed
+      if (prevOutputRef.current !== nextValue) {
+          prevOutputRef.current = nextValue;
+          onChange(nextValue);
       }
   }, [items, onChange]);
 
