@@ -251,7 +251,7 @@ const RequestPanel: React.FC<RequestPanelProps> = ({
           <h1 className="text-xl font-bold text-slate-900 truncate shrink" title={service.name}>{service.name}</h1>
           
           {isAsync ? (
-              <span className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100 text-[10px] font-bold uppercase tracking-wide">
+              <span className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-cyan-50 text-cyan-700 border border-cyan-100 text-[10px] font-bold uppercase tracking-wide">
                   <Clock size={10} strokeWidth={2.5} /> {t.common.async}
               </span>
           ) : (
@@ -289,16 +289,18 @@ const RequestPanel: React.FC<RequestPanelProps> = ({
 
           <div className="flex items-center gap-3 shrink-0">
             {service.docUrl && (
-                 <button 
-                 onClick={() => {
-                     if (service.docUrl) window.open(service.docUrl, '_blank');
-                 }}
-                 className="flex items-center gap-2 px-3 py-2 rounded-md font-medium transition-all bg-white text-gray-700 border border-gray-200 shadow-sm hover:text-indigo-600 hover:border-indigo-300 active:scale-95"
-                 title={t.request.apiDocs}
-               >
-                 <FileText size={16} />
-                 <span>{t.request.apiDocs}</span>
-               </button>
+                 <div className="bg-white rounded-md shadow-sm border border-gray-200">
+                     <button 
+                     onClick={() => {
+                         if (service.docUrl) window.open(service.docUrl, '_blank');
+                     }}
+                     className="flex items-center gap-2 px-3 py-2 font-medium transition-all text-gray-700 hover:text-indigo-600 hover:bg-gray-50 active:scale-95 rounded-md"
+                     title={t.request.apiDocs}
+                   >
+                     <FileText size={16} />
+                     <span>{t.request.apiDocs}</span>
+                   </button>
+               </div>
             )}
 
             <button
