@@ -1,15 +1,19 @@
 
+
 export interface ApiParam {
   id: string;
   key: string;
   value: string | number | boolean | object;
-  type: 'string' | 'integer' | 'float' | 'boolean' | 'json' | 'image';
+  type: 'string' | 'integer' | 'float' | 'boolean' | 'json' | 'file';
   description?: string;
   required?: boolean;
-  // Image specific config
+  enabled?: boolean;
+  // File specific config
   enableUrlConversion?: boolean;
   enableBase64Conversion?: boolean;
-  enableMultiImage?: boolean;
+  enableMultiFile?: boolean;
+  // String specific config
+  enableMultiString?: boolean;
 }
 
 export interface ServiceGroup {

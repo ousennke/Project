@@ -1,14 +1,16 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import RequestPanel from './components/RequestPanel';
 import ResponsePanel from './components/ResponsePanel';
-import SettingsModal from './components/SettingsModal';
+import SettingsModal, { SettingsTab } from './components/SettingsModal';
 import ServiceSettingsModal from './components/ServiceSettingsModal';
 import ImportSummaryModal, { ImportSummaryData } from './components/ImportSummaryModal';
+import ImportSelectionModal from './components/ImportSelectionModal';
+import ImportModeModal from './components/ImportModeModal';
 import ConfirmDialog from './components/ConfirmDialog';
 import { ApiService, Credentials, ResponseData, ServiceGroup } from './types';
 import { signRequest } from './services/volcSigner';
+import { LanguageProvider } from './i18n';
 
 const DEFAULT_GROUP_ID = 'g_default';
 const DEFAULT_SERVICE_ID = 's_default_1';
@@ -31,14 +33,14 @@ const DEFAULT_SERVICES: ApiService[] = [
     method: 'POST',
     docUrl: 'https://www.volcengine.com/docs/85128/1526761',
     params: [
-      { id: 'p1', key: 'req_key', value: 'high_aes_general_v30l_zt2i', type: 'string', description: 'Algorithm name, fixed value' },
-      { id: 'p2', key: 'prompt', value: 'A majestic cyberpunk city with neon lights, rainy streets, cinematic lighting', type: 'string', description: 'Prompt for image generation' },
-      { id: 'p3', key: 'use_pre_llm', value: true, type: 'boolean', description: 'Enable prompt enhancement' },
-      { id: 'p4', key: 'scale', value: 2.5, type: 'float', description: 'Guidance scale [1-10]' },
-      { id: 'p5', key: 'seed', value: -1, type: 'integer', description: 'Random seed, -1 for random' },
-      { id: 'p6', key: 'width', value: 1024, type: 'integer', description: 'Image width' },
-      { id: 'p7', key: 'height', value: 1024, type: 'integer', description: 'Image height' },
-      { id: 'p8', key: 'return_url', value: true, type: 'boolean' },
+      { id: 'p1', key: 'req_key', value: 'high_aes_general_v30l_zt2i', type: 'string', description: 'Algorithm name, fixed value', enabled: true },
+      { id: 'p2', key: 'prompt', value: 'A majestic cyberpunk city with neon lights, rainy streets, cinematic lighting', type: 'string', description: 'Prompt for image generation', enabled: true },
+      { id: 'p3', key: 'use_pre_llm', value: true, type: 'boolean', description: 'Enable prompt enhancement', enabled: true },
+      { id: 'p4', key: 'scale', value: 2.5, type: 'float', description: 'Guidance scale [1-10]', enabled: true },
+      { id: 'p5', key: 'seed', value: -1, type: 'integer', description: 'Random seed, -1 for random', enabled: true },
+      { id: 'p6', key: 'width', value: 1024, type: 'integer', description: 'Image width', enabled: true },
+      { id: 'p7', key: 'height', value: 1024, type: 'integer', description: 'Image height', enabled: true },
+      { id: 'p8', key: 'return_url', value: true, type: 'boolean', enabled: true },
     ],
   }
 ];
@@ -59,7 +61,7 @@ const simpleHash = (str: string) => {
   return hash.toString();
 };
 
-const App: React.FC = () => {
+const AppContent: React.FC = () => {
   const [groups, setGroups] = useState<ServiceGroup[]>(DEFAULT_GROUPS);
   const [services, setServices] = useState<ApiService[]>(DEFAULT_SERVICES);
   const [selectedServiceId, setSelectedServiceId] = useState<string>(DEFAULT_SERVICES[0].id);
@@ -69,15 +71,20 @@ const App: React.FC = () => {
     secretAccessKey: '',
   });
   const [proxyUrl, setProxyUrl] = useState('');
-  const [imgbbKey, setImgbbKey] = useState('');
   
   // Modal States
   const [showSettings, setShowSettings] = useState(false);
+  const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('general');
   const [showServiceSettings, setShowServiceSettings] = useState<string | null>(null);
   const [importSummary, setImportSummary] = useState<ImportSummaryData | null>(null);
   const [showUpdatePrompt, setShowUpdatePrompt] = useState(false);
   const [pendingConfig, setPendingConfig] = useState<any | null>(null);
   
+  // Import States
+  const [importModeData, setImportModeData] = useState<any | null>(null); // Holds data for Mode Selection
+  const [importSelectionData, setImportSelectionData] = useState<any | null>(null); // Holds data for Granular Selection
+  const [pendingImportCreds, setPendingImportCreds] = useState(false); // Stores credential decision
+
   const [loading, setLoading] = useState(false);
   const [responseData, setResponseData] = useState<ResponseData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -85,7 +92,7 @@ const App: React.FC = () => {
 
   // Layout State
   const [sidebarWidth, setSidebarWidth] = useState(280);
-  const [requestPanelWidth, setRequestPanelWidth] = useState(450);
+  const [requestPanelWidth, setRequestPanelWidth] = useState(500);
   const [isResizing, setIsResizing] = useState<'sidebar' | 'request' | null>(null);
 
   // Load from local storage on mount
@@ -96,9 +103,6 @@ const App: React.FC = () => {
     }
     const storedProxy = localStorage.getItem('volc_playground_proxy');
     if (storedProxy) setProxyUrl(storedProxy);
-
-    const storedImgbb = localStorage.getItem('volc_playground_imgbb');
-    if (storedImgbb) setImgbbKey(storedImgbb);
     
     const storedConfig = localStorage.getItem('volc_playground_config');
     if (storedConfig) {
@@ -211,7 +215,7 @@ const App: React.FC = () => {
       } else if (isResizing === 'request') {
         const offset = e.clientX - sidebarWidth;
         const maxW = window.innerWidth - sidebarWidth - 300; 
-        const newWidth = Math.max(300, Math.min(maxW, offset));
+        const newWidth = Math.max(480, Math.min(maxW, offset));
         setRequestPanelWidth(newWidth);
       }
     };
@@ -246,11 +250,6 @@ const App: React.FC = () => {
       localStorage.setItem('volc_playground_proxy', url);
   };
 
-  const handleSaveImgbbKey = (key: string) => {
-      setImgbbKey(key);
-      localStorage.setItem('volc_playground_imgbb', key);
-  };
-
   // -- Data Manipulation Handlers --
   const handleAddGroup = () => {
     const newGroup: ServiceGroup = { id: `g_${Date.now()}`, name: 'New Group', collapsed: false };
@@ -281,7 +280,7 @@ const App: React.FC = () => {
       id: `s_${Date.now()}`,
       groupId,
       name: 'New Service',
-      params: DEFAULT_SERVICES[0].params.map(p => ({...p, id: `p_${Date.now()}_${Math.random()}`}))
+      params: DEFAULT_SERVICES[0].params.map(p => ({...p, id: `p_${Date.now()}_${Math.random()}`, enabled: true}))
     };
     setServices([...services, newService]);
     setSelectedServiceId(newService.id);
@@ -367,20 +366,19 @@ const App: React.FC = () => {
             const content = e.target?.result as string;
             const config = JSON.parse(content);
             if (Array.isArray(config.groups) && Array.isArray(config.services)) {
-                applyConfig(config);
-                
-                let hasCreds = false;
-                if (config.credentials && config.credentials.accessKeyId) {
-                    hasCreds = true;
+                // Ensure params have 'enabled' prop for backward compatibility
+                if (config.services) {
+                    config.services = config.services.map((s: any) => ({
+                        ...s,
+                        params: s.params.map((p: any) => ({
+                            ...p,
+                            enabled: p.enabled !== undefined ? p.enabled : true
+                        }))
+                    }));
                 }
-
-                setImportSummary({
-                    serviceCount: config.services.length,
-                    groupCount: config.groups.length,
-                    hasCredentials: hasCreds,
-                    serviceNames: config.services.map((s: ApiService) => s.name)
-                });
-                setShowSettings(false);
+                // Open Mode Selection Modal first
+                setImportModeData(config);
+                setShowSettings(false); 
             } else {
                 alert('Invalid configuration format');
             }
@@ -389,6 +387,106 @@ const App: React.FC = () => {
         }
     };
     reader.readAsText(file);
+  };
+
+  const handleImportModeSelect = (mode: 'overwrite' | 'merge', importCreds: boolean) => {
+      if (!importModeData) return;
+
+      if (mode === 'overwrite') {
+          // Full Replacement Logic
+          setGroups(importModeData.groups);
+          setServices(importModeData.services);
+          if (importModeData.services.length > 0) {
+              setSelectedServiceId(importModeData.services[0].id);
+          } else {
+              setSelectedServiceId('');
+          }
+
+          let credsUpdated = false;
+          if (importCreds && importModeData.credentials) {
+              setCredentials(importModeData.credentials);
+              localStorage.setItem('volc_playground_creds', JSON.stringify(importModeData.credentials));
+              credsUpdated = true;
+          }
+
+          setImportSummary({
+              serviceCount: importModeData.services.length,
+              groupCount: importModeData.groups.length,
+              hasCredentials: credsUpdated,
+              serviceNames: importModeData.services.map((s: any) => s.name)
+          });
+          setImportModeData(null); // Close modal
+
+      } else {
+          // Merge Logic: Proceed to Selection Modal
+          // Pass the credential decision to the next step via state or handle it later
+          setPendingImportCreds(importCreds);
+          setImportSelectionData(importModeData);
+          setImportModeData(null); // Close mode modal, open selection modal
+      }
+  };
+
+  const handleConfirmImportSelection = (selectedIndices: number[]) => {
+    if (!importSelectionData) return;
+    
+    const selectedServices = selectedIndices.map(i => importSelectionData.services[i]);
+    const { groups: importedGroups, credentials: importedCreds } = importSelectionData;
+
+    // 1. Merge Groups
+    const newGroups = [...groups];
+    importedGroups.forEach((impG: ServiceGroup) => {
+        const existingGIndex = newGroups.findIndex(g => g.id === impG.id);
+        if (existingGIndex === -1) {
+            newGroups.push(impG);
+        }
+    });
+
+    // 2. Merge Services
+    const newServices = [...services];
+    let addedCount = 0;
+    let updatedCount = 0;
+
+    selectedServices.forEach((impS: ApiService) => {
+        // Match by Name as requested
+        const existingIndex = newServices.findIndex(s => s.name === impS.name);
+        
+        if (existingIndex >= 0) {
+            // UPDATE: Keep local ID, overwrite content
+            const existingId = newServices[existingIndex].id;
+            newServices[existingIndex] = { ...impS, id: existingId };
+            updatedCount++;
+        } else {
+            // ADD: Check ID collision. 
+            let newId = impS.id;
+            if (newServices.some(s => s.id === newId)) {
+                 newId = `s_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            }
+            newServices.push({ ...impS, id: newId });
+            addedCount++;
+        }
+    });
+
+    setGroups(newGroups);
+    setServices(newServices);
+    
+    // Apply Credentials if selected in the previous Mode modal
+    let credsUpdated = false;
+    if (pendingImportCreds && importedCreds) {
+        setCredentials(importedCreds);
+        localStorage.setItem('volc_playground_creds', JSON.stringify(importedCreds));
+        credsUpdated = true;
+    }
+
+    setImportSelectionData(null);
+    setPendingImportCreds(false);
+
+    // Show Summary
+    setImportSummary({
+        serviceCount: addedCount + updatedCount,
+        groupCount: newGroups.length, 
+        hasCredentials: credsUpdated,
+        serviceNames: selectedServices.map((s: ApiService) => s.name)
+    });
   };
 
   // -- HTTP Logic --
@@ -445,14 +543,16 @@ const App: React.FC = () => {
   const handleSendRequest = async () => {
     if (!selectedService) return;
     if (!credentials.accessKeyId || !credentials.secretAccessKey) {
+      setSettingsInitialTab('credentials');
       setShowSettings(true);
       return;
     }
 
     // --- VALIDATION START ---
-    const pendingImages = selectedService.params.filter(p => p.type === 'image' && (!p.value || String(p.value).trim() === ''));
-    if (pendingImages.length > 0) {
-        alert(`Parameter "${pendingImages[0].key}" has an image selected but not converted. Please click "To URL" or "To Base64" before running the request.`);
+    // Check for empty file/string conversions - ONLY enabled params
+    const pendingFiles = selectedService.params.filter(p => p.enabled !== false && p.type === 'file' && (!p.value || String(p.value).trim() === ''));
+    if (pendingFiles.length > 0) {
+        alert(`Parameter "${pendingFiles[0].key}" has a file selected but not converted or empty. Please click "To URL" or "To Base64" before running the request.`);
         return;
     }
     // --- VALIDATION END ---
@@ -473,14 +573,17 @@ const App: React.FC = () => {
     try {
       const payload: Record<string, any> = {};
       selectedService.params.forEach(p => {
+         // Skip disabled params
+         if (p.enabled === false) return;
+
          if (p.type === 'json' && typeof p.value === 'string') {
             try { payload[p.key] = JSON.parse(p.value); } catch { payload[p.key] = p.value; }
          } else {
              let val = p.value;
              
-             // Special handling for Image type: 
-             // If value looks like a JSON array string (from multiple image uploads), parse it back to array
-             if (p.type === 'image' && typeof val === 'string') {
+             // Special handling for File type: 
+             // If value looks like a JSON array string (from multiple file uploads), parse it back to array
+             if (p.type === 'file' && typeof val === 'string') {
                  try {
                      const parsed = JSON.parse(val);
                      if (Array.isArray(parsed)) val = parsed;
@@ -658,7 +761,10 @@ const App: React.FC = () => {
             onAddGroup={handleAddGroup}
             onDeleteService={handleDeleteService}
             onDeleteGroup={handleDeleteGroup}
-            onOpenGlobalSettings={() => setShowSettings(true)}
+            onOpenGlobalSettings={() => {
+                setSettingsInitialTab('general');
+                setShowSettings(true);
+            }}
             onOpenServiceSettings={(id) => setShowServiceSettings(id)}
             onToggleGroup={handleToggleGroup}
             onRenameGroup={handleRenameGroup}
@@ -686,7 +792,7 @@ const App: React.FC = () => {
                         onSend={handleSendRequest}
                         onStop={handleStopRequest}
                         loading={loading}
-                        imgbbApiKey={imgbbKey}
+                        corsProxy={proxyUrl}
                     />
                     <div 
                         className="absolute right-[-3px] top-0 w-[6px] h-full cursor-col-resize hover:bg-indigo-500 transition-colors z-50 opacity-0 hover:opacity-100"
@@ -698,6 +804,7 @@ const App: React.FC = () => {
                     <ResponsePanel
                         response={responseData}
                         error={error}
+                        loading={loading}
                     />
                 </div>
             </>
@@ -717,8 +824,7 @@ const App: React.FC = () => {
         onImportConfig={handleImportConfig}
         proxyUrl={proxyUrl}
         onSaveProxy={handleSaveProxy}
-        imgbbKey={imgbbKey}
-        onSaveImgbbKey={handleSaveImgbbKey}
+        initialTab={settingsInitialTab}
       />
 
       <ServiceSettingsModal
@@ -736,6 +842,22 @@ const App: React.FC = () => {
         summary={importSummary}
       />
 
+      <ImportModeModal 
+        isOpen={!!importModeData}
+        onClose={() => setImportModeData(null)}
+        serviceCount={importModeData?.services?.length || 0}
+        hasCredentialsInFile={!!importModeData?.credentials?.accessKeyId}
+        onSelectMode={handleImportModeSelect}
+      />
+
+      <ImportSelectionModal
+        isOpen={!!importSelectionData}
+        onClose={() => setImportSelectionData(null)}
+        importData={importSelectionData}
+        existingServices={services}
+        onConfirm={handleConfirmImportSelection}
+      />
+
       <ConfirmDialog 
         isOpen={showUpdatePrompt}
         title="Configuration Update Found"
@@ -746,5 +868,13 @@ const App: React.FC = () => {
     </div>
   );
 };
+
+const App: React.FC = () => {
+    return (
+        <LanguageProvider>
+            <AppContent />
+        </LanguageProvider>
+    );
+}
 
 export default App;

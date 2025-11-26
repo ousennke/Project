@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 import { ApiService, ServiceGroup } from '../types';
 import { 
@@ -11,7 +12,10 @@ import {
   Folder, 
   Edit2,
   GripVertical,
+  Clock,
+  Zap,
 } from 'lucide-react';
+import { useLanguage } from '../i18n';
 
 interface SidebarProps {
   groups: ServiceGroup[];
@@ -61,6 +65,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   onReorderService,
   onReorderGroup
 }) => {
+  const { t } = useLanguage();
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [deleteConfirmGroupId, setDeleteConfirmGroupId] = useState<string | null>(null);
@@ -195,12 +200,12 @@ const Sidebar: React.FC<SidebarProps> = ({
           <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white shadow-indigo-200 shadow-md">
             <Code2 size={20} />
           </div>
-          <span className="hidden sm:inline">VolcAPI</span>
+          <span className="hidden sm:inline">{t.sidebar.volcApi}</span>
         </div>
         <button 
           onClick={onOpenGlobalSettings}
           className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-colors"
-          title="Global Settings"
+          title={t.sidebar.globalSettings}
         >
           <Settings size={18} />
         </button>
@@ -283,7 +288,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                                         onMouseDown={(e) => e.stopPropagation()}
                                         className="px-2 py-0.5 bg-red-100 text-red-600 hover:bg-red-200 text-[10px] font-bold rounded shadow-sm whitespace-nowrap"
                                     >
-                                        Confirm Delete
+                                        {t.sidebar.confirmDelete}
                                     </button>
                                  ) : (
                                     <>
@@ -291,7 +296,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                                             onClick={(e) => { e.stopPropagation(); onAddService(group.id); }} 
                                             onMouseDown={(e) => e.stopPropagation()}
                                             className="p-1 text-gray-400 hover:text-indigo-600" 
-                                            title="Add Service"
+                                            title={t.sidebar.addService}
                                         >
                                             <Plus size={14}/>
                                         </button>
@@ -299,7 +304,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                                             onClick={(e) => { e.stopPropagation(); startGroupEdit(group); }} 
                                             onMouseDown={(e) => e.stopPropagation()}
                                             className="p-1 text-gray-400 hover:text-indigo-600" 
-                                            title="Rename Group"
+                                            title={t.sidebar.renameGroup}
                                         >
                                             <Edit2 size={14}/>
                                         </button>
@@ -311,7 +316,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                                             }} 
                                             onMouseDown={(e) => e.stopPropagation()}
                                             className="p-1 text-gray-400 hover:text-red-500" 
-                                            title="Delete Group"
+                                            title={t.sidebar.deleteGroup}
                                         >
                                             <Trash2 size={14}/>
                                         </button>
@@ -329,13 +334,14 @@ const Sidebar: React.FC<SidebarProps> = ({
                                         onDragOver={(e) => handleDragOver(e, group.id, 'EMPTY_GROUP')}
                                         onDrop={(e) => handleDrop(e, group.id, 'EMPTY_GROUP')}
                                     >
-                                        {draggedItem?.type === 'SERVICE' ? 'Drop service here' : 'No services'}
+                                        {draggedItem?.type === 'SERVICE' ? t.sidebar.dropService : t.sidebar.noServices}
                                     </div>
                                 )}
                                 {groupServices.map(service => {
                                     const isServiceDropTarget = dropIndicator?.targetId === service.id;
                                     const showServiceLineBefore = isServiceDropTarget && dropIndicator.position === 'before';
                                     const showServiceLineAfter = isServiceDropTarget && dropIndicator.position === 'after';
+                                    const isAsync = service.asyncConfig?.enabled;
 
                                     return (
                                         <div
@@ -364,7 +370,18 @@ const Sidebar: React.FC<SidebarProps> = ({
                                                 </div>
                                                 
                                                 <div className="min-w-0 flex-1 flex flex-col">
-                                                    <span className="truncate font-medium">{service.name}</span>
+                                                    <div className="flex items-center gap-1.5 min-w-0">
+                                                        <span className="truncate font-medium">{service.name}</span>
+                                                        {isAsync ? (
+                                                            <span className="flex-none flex items-center gap-0.5 px-1 py-px rounded bg-purple-50 text-purple-600 border border-purple-100 text-[9px] font-bold uppercase" title={t.serviceSettings.asyncWorkflow}>
+                                                                <Clock size={8} strokeWidth={3} /> {t.common.async}
+                                                            </span>
+                                                        ) : (
+                                                            <span className="flex-none flex items-center gap-0.5 px-1 py-px rounded bg-blue-50 text-blue-600 border border-blue-100 text-[9px] font-bold uppercase" title={t.common.sync}>
+                                                                <Zap size={8} strokeWidth={3} fill="currentColor" className="text-blue-300" /> {t.common.sync}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                     <span className="text-[10px] text-gray-400 truncate font-normal">{service.description}</span>
                                                 </div>
 
@@ -397,7 +414,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             className="w-full flex items-center justify-center gap-2 py-3 border border-dashed border-gray-300 hover:border-indigo-400 hover:text-indigo-600 text-gray-400 rounded-lg text-xs font-medium transition-all mt-4"
         >
             <Plus size={14} />
-            Add New Group
+            {t.sidebar.addNewGroup}
         </button>
 
       </div>

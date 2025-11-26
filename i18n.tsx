@@ -1,0 +1,465 @@
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+
+type Language = 'en' | 'zh';
+
+const translations = {
+  en: {
+    common: {
+      save: "Save",
+      cancel: "Cancel",
+      delete: "Delete",
+      confirm: "Confirm",
+      warning: "Warning",
+      error: "Error",
+      success: "Success",
+      loading: "Loading...",
+      copy: "Copy",
+      copied: "Copied",
+      edit: "Edit",
+      add: "Add",
+      stop: "Stop",
+      download: "Download",
+      settings: "Settings",
+      sync: "SYNC",
+      async: "ASYNC",
+    },
+    sidebar: {
+      volcApi: "VolcAPI",
+      globalSettings: "Global Settings",
+      searchPlaceholder: "Search...",
+      addNewGroup: "Add New Group",
+      confirmDelete: "Confirm Delete",
+      dropService: "Drop service here",
+      noServices: "No services",
+      deleteGroup: "Delete Group",
+      renameGroup: "Rename Group",
+      addService: "Add Service",
+    },
+    request: {
+      params: "Params",
+      json: "JSON",
+      runRequest: "Run Request",
+      stop: "Stop",
+      apiDocs: "Doc",
+      key: "Key",
+      value: "Value",
+      description: "Description",
+      addParam: "Add Parameter",
+      dragReorder: "Drag to reorder",
+      paramSettings: "Param Settings",
+      deleteParam: "Delete Param",
+      wrap: "Wrap",
+      noWrap: "No Wrap",
+      enableParam: "Enabled",
+      disableParam: "Disabled",
+    },
+    response: {
+      processing: "Processing Request...",
+      failed: "Request Failed",
+      noResult: "Run a request to see results here",
+      preview: "Preview",
+      raw: "JSON",
+      image: "Image",
+      video: "Video",
+      polling: "Polling Result...",
+      noMedia: "No visual media detected in response.",
+      viewJson: "View JSON",
+    },
+    settings: {
+      title: "Settings",
+      general: "General",
+      globalConfig: "Global Config",
+      credentials: "Credentials",
+      networkImages: "Network & Files",
+      dataStorage: "Data & Storage",
+      language: "Language / 语言",
+      
+      // Credentials
+      volcCredentials: "VolcEngine Credentials",
+      credWarning: "stored locally in browser. Only used for signing requests.",
+      ak: "Access Key ID (AK)",
+      sk: "Secret Access Key (SK)",
+      saveCreds: "Save Credentials",
+      
+      // Network
+      networkUploads: "Network & Uploads",
+      corsProxy: "CORS Proxy",
+      proxyPrefix: "Proxy URL Prefix",
+      uguuUpload: "Tmpfiles.org Upload",
+      uguuHint: "Used for 'File' type parameters. Files are uploaded to tmpfiles.org (valid for 60 mins). This provider supports CORS, so it should work with your VPN.",
+      saveChanges: "Save Changes",
+
+      // Storage
+      exportConfig: "Export Configuration",
+      exportHint: "Download current setup as JSON.",
+      includeCreds: "Include Access Key & Secret Key",
+      includeCredsWarning: "Warning: The exported file will contain sensitive secrets.",
+      downloadJson: "Download JSON",
+      importConfig: "Import Configuration",
+      importHint: "Restore from a JSON file.",
+      selectFile: "Select File...",
+    },
+    serviceSettings: {
+      title: "Service Configuration",
+      basicSettings: "Basic Settings",
+      asyncWorkflow: "Async Workflow",
+      displayName: "Display Name",
+      group: "Group",
+      description: "Description",
+      apiEndpoint: "API Endpoint",
+      hostEndpoint: "Host / Endpoint",
+      region: "Region",
+      version: "Version",
+      action: "Action",
+      documentation: "Documentation",
+      docUrl: "Documentation URL",
+      deleteService: "Delete Service",
+      confirmDelete: "Confirm Delete?",
+      
+      // Async
+      enableAsync: "Enable Async Workflow",
+      enableAsyncHint: "Automatically poll for results after submission.",
+      pollingRequest: "Polling Request",
+      pollAction: "Poll Action",
+      pollVersion: "Poll Version",
+      staticParams: "Static Poll Params (JSON)",
+      staticParamsHint: "Use this to set fixed parameters like req_key for the polling request.",
+      idExtraction: "ID Extraction & Passing",
+      idKey: "ID Key in Poll Request",
+      statusChecking: "Status Checking",
+      successValue: "Success Value",
+      errorPath: "Error Path (Opt)",
+      timingOptions: "Timing & Options",
+      pollInterval: "Poll Interval (ms)",
+      timeout: "Timeout (s)",
+      inheritParams: "Inherit Submit Params",
+    },
+    paramConfig: {
+      title: "Parameter Config",
+      keyName: "Key Name",
+      dataType: "Data Type",
+      defaultValue: "Default Value",
+      description: "Description",
+      enableMulti: "Enable Multi-File Input (Array)",
+      enableMultiString: "Enable Multi-value Input (Array)",
+      allowedConversions: "Allowed Conversions",
+      enableUrl: "Enable Upload to URL (tmpfiles.org)",
+      enableBase64: "Enable Base64 Conversion",
+      conversionError: "You must enable at least one option.",
+      configuredViaUpload: "Configured via upload",
+      configuredViaList: "Configured via list",
+    },
+    fileInput: {
+      toUrl: "To URL",
+      toBase64: "To Base64",
+      addFile: "Add File",
+      select: "Select File",
+      error: "Error",
+      restoredUrl: "Restored Value (URL)",
+      restoredBase64: "Restored Value (Base64)",
+      convertUrl: "Convert to URL",
+      convertBase64: "Convert to Base64",
+      uploading: "Uploading...",
+    },
+    imageInput: {
+      select: "Select Image",
+      error: "Error",
+      convertUrl: "Convert to URL",
+      restoredUrl: "Restored Value (URL)",
+      toUrl: "To URL",
+      convertBase64: "Convert to Base64",
+      restoredBase64: "Restored Value (Base64)",
+      toBase64: "To Base64",
+      addImage: "Add Image",
+    },
+    importSummary: {
+      successTitle: "Import Successful",
+      successMsg: "Your configuration has been loaded.",
+      services: "Services",
+      groups: "Groups",
+      credsUpdated: "Credentials Updated",
+      noCreds: "No Credentials Imported",
+      credsLoaded: "Access Key & Secret Key loaded.",
+      credsExisting: "Using existing or empty credentials.",
+      importedServices: "Imported Services",
+      noServicesFound: "No services found",
+      gotIt: "Got it, thanks!",
+    },
+    importMode: {
+      title: "Import Configuration",
+      selectMode: "Select Import Mode",
+      overwrite: "Overwrite All",
+      overwriteDesc: "Replace current configuration with file content. Existing data will be lost.",
+      merge: "Merge & Append",
+      mergeDesc: "Select specific services to add or update. Existing data remains.",
+      importCreds: "Import Credentials (AK/SK)",
+      credFound: "Found in file",
+      credNotFound: "Not found in file",
+      servicesFound: "Services found",
+    },
+    importSelection: {
+      title: "Select Services to Import",
+      selectAll: "Select All",
+      deselectAll: "Deselect All",
+      new: "New",
+      update: "Modify",
+      importBtn: "Import Selected",
+      foundServices: "Found {{count}} services in file",
+      found: "Found",
+      notFound: "Not Found",
+    },
+    confirmDialog: {
+      keepCurrent: "No, keep current",
+      update: "Yes, Update",
+    }
+  },
+  zh: {
+    common: {
+      save: "保存",
+      cancel: "取消",
+      delete: "删除",
+      confirm: "确认",
+      warning: "警告",
+      error: "错误",
+      success: "成功",
+      loading: "加载中...",
+      copy: "复制",
+      copied: "已复制",
+      edit: "编辑",
+      add: "添加",
+      stop: "停止",
+      download: "下载",
+      settings: "设置",
+      sync: "同步",
+      async: "异步",
+    },
+    sidebar: {
+      volcApi: "VolcAPI",
+      globalSettings: "全局设置",
+      searchPlaceholder: "搜索...",
+      addNewGroup: "新建分组",
+      confirmDelete: "确认删除",
+      dropService: "拖拽服务到此",
+      noServices: "无服务",
+      deleteGroup: "删除分组",
+      renameGroup: "重命名分组",
+      addService: "添加服务",
+    },
+    request: {
+      params: "参数",
+      json: "JSON",
+      runRequest: "运行请求",
+      stop: "停止",
+      apiDocs: "Doc",
+      key: "键 (Key)",
+      value: "值 (Value)",
+      description: "描述",
+      addParam: "添加参数",
+      dragReorder: "拖拽排序",
+      paramSettings: "参数设置",
+      deleteParam: "删除参数",
+      wrap: "换行",
+      noWrap: "不换行",
+      enableParam: "已启用",
+      disableParam: "已禁用",
+    },
+    response: {
+      processing: "请求处理中...",
+      failed: "请求失败",
+      noResult: "运行请求以在此处查看结果",
+      preview: "预览",
+      raw: "JSON",
+      image: "图片",
+      video: "视频",
+      polling: "轮询结果中...",
+      noMedia: "响应中未检测到可视化媒体。",
+      viewJson: "查看 JSON",
+    },
+    settings: {
+      title: "设置",
+      general: "通用",
+      globalConfig: "全局配置",
+      credentials: "凭证 (Credentials)",
+      networkImages: "网络与文件",
+      dataStorage: "数据与存储",
+      language: "Language / 语言",
+      
+      // Credentials
+      volcCredentials: "VolcEngine 凭证",
+      credWarning: "存储在本地浏览器中。仅用于请求签名。",
+      ak: "Access Key ID (AK)",
+      sk: "Secret Access Key (SK)",
+      saveCreds: "保存凭证",
+      
+      // Network
+      networkUploads: "网络与上传",
+      corsProxy: "CORS 代理",
+      proxyPrefix: "代理 URL 前缀",
+      uguuUpload: "Tmpfiles.org 上传",
+      uguuHint: "用于 'File' 类型参数上传转 URL。文件上传至 tmpfiles.org (60分钟保留)。此服务支持 CORS，配合您的 VPN 通常不需要配置额外的 Proxy。",
+      saveChanges: "保存更改",
+
+      // Storage
+      exportConfig: "导出配置",
+      exportHint: "将当前设置下载为 JSON。",
+      includeCreds: "包含 Access Key & Secret Key",
+      includeCredsWarning: "警告：导出的文件将包含敏感密钥。",
+      downloadJson: "下载 JSON",
+      importConfig: "导入配置",
+      importHint: "从 JSON 文件恢复。",
+      selectFile: "选择文件...",
+    },
+    serviceSettings: {
+      title: "服务配置",
+      basicSettings: "基础设置",
+      asyncWorkflow: "异步工作流 (Async)",
+      displayName: "显示名称",
+      group: "分组",
+      description: "描述",
+      apiEndpoint: "API Endpoint",
+      hostEndpoint: "Host / Endpoint",
+      region: "Region",
+      version: "Version",
+      action: "Action",
+      documentation: "文档",
+      docUrl: "文档 URL",
+      deleteService: "删除服务",
+      confirmDelete: "确认删除？",
+      
+      // Async
+      enableAsync: "启用异步工作流",
+      enableAsyncHint: "提交后自动轮询结果。",
+      pollingRequest: "轮询请求 (Polling Request)",
+      pollAction: "Poll Action",
+      pollVersion: "Poll Version",
+      staticParams: "静态轮询参数 (JSON)",
+      staticParamsHint: "用于设置轮询请求的固定参数，如 req_key。",
+      idExtraction: "ID 提取与传递",
+      idKey: "轮询请求中的 ID Key",
+      statusChecking: "状态检查",
+      successValue: "成功值 (Success Value)",
+      errorPath: "错误路径 (可选)",
+      timingOptions: "时间与选项",
+      pollInterval: "轮询间隔 (ms)",
+      timeout: "超时时间 (s)",
+      inheritParams: "继承提交参数",
+    },
+    paramConfig: {
+      title: "参数配置",
+      keyName: "参数名 (Key)",
+      dataType: "数据类型",
+      defaultValue: "默认值",
+      description: "描述",
+      enableMulti: "启用多文件输入 (Array)",
+      enableMultiString: "启用多值输入 (Array)",
+      allowedConversions: "允许的转换方式",
+      enableUrl: "启用上传转 URL (tmpfiles.org)",
+      enableBase64: "启用 Base64 转换",
+      conversionError: "必须启用至少一个选项。",
+      configuredViaUpload: "通过上传配置",
+      configuredViaList: "通过列表配置",
+    },
+    fileInput: {
+      toUrl: "转 URL",
+      toBase64: "转 Base64",
+      addFile: "添加文件",
+      select: "选择文件",
+      error: "错误",
+      restoredUrl: "已恢复值 (URL)",
+      restoredBase64: "已恢复值 (Base64)",
+      convertUrl: "转换为 URL",
+      convertBase64: "转换为 Base64",
+      uploading: "上传中...",
+    },
+    imageInput: {
+      select: "选择图片",
+      error: "错误",
+      convertUrl: "转换为 URL",
+      restoredUrl: "已恢复值 (URL)",
+      toUrl: "转 URL",
+      convertBase64: "转换为 Base64",
+      restoredBase64: "已恢复值 (Base64)",
+      toBase64: "To Base64",
+      addImage: "添加图片",
+    },
+    importSummary: {
+      successTitle: "导入成功",
+      successMsg: "您的配置已加载。",
+      services: "服务",
+      groups: "分组",
+      credsUpdated: "凭证已更新",
+      noCreds: "未导入凭证",
+      credsLoaded: "Access Key & Secret Key 已加载。",
+      credsExisting: "使用现有或空凭证。",
+      importedServices: "已导入服务",
+      noServicesFound: "未找到服务",
+      gotIt: "知道了，谢谢！",
+    },
+    importMode: {
+      title: "导入配置",
+      selectMode: "选择导入模式",
+      overwrite: "完全覆盖",
+      overwriteDesc: "使用文件内容替换当前配置。现有数据将丢失。",
+      merge: "追加更新",
+      mergeDesc: "选择特定服务进行添加或更新。现有数据保留。",
+      importCreds: "导入凭证 (AK/SK)",
+      credFound: "文件已包含",
+      credNotFound: "文件未包含",
+      servicesFound: "个服务",
+    },
+    importSelection: {
+      title: "选择要导入的服务",
+      selectAll: "全选",
+      deselectAll: "取消全选",
+      new: "新增",
+      update: "修改",
+      importBtn: "导入选中项",
+      foundServices: "文件中发现 {{count}} 个服务",
+      found: "已发现",
+      notFound: "未找到",
+    },
+    confirmDialog: {
+      keepCurrent: "No, keep current",
+      update: "Yes, Update",
+    }
+  }
+};
+
+interface LanguageContextType {
+  language: Language;
+  setLanguage: (lang: Language) => void;
+  t: typeof translations['en'];
+}
+
+const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
+
+export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const [language, setLanguage] = useState<Language>('en');
+
+  // Load from local storage
+  useEffect(() => {
+    const stored = localStorage.getItem('volc_playground_lang') as Language;
+    if (stored && (stored === 'en' || stored === 'zh')) {
+      setLanguage(stored);
+    }
+  }, []);
+
+  const handleSetLanguage = (lang: Language) => {
+    setLanguage(lang);
+    localStorage.setItem('volc_playground_lang', lang);
+  };
+
+  return (
+    <LanguageContext.Provider value={{ language, setLanguage: handleSetLanguage, t: translations[language] }}>
+      {children}
+    </LanguageContext.Provider>
+  );
+};
+
+export const useLanguage = () => {
+  const context = useContext(LanguageContext);
+  if (context === undefined) {
+    throw new Error('useLanguage must be used within a LanguageProvider');
+  }
+  return context;
+};

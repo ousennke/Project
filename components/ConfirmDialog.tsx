@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { AlertTriangle } from 'lucide-react';
+import { useLanguage } from '../i18n';
 
 interface ConfirmDialogProps {
   isOpen: boolean;
@@ -17,6 +18,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   onConfirm,
   onCancel
 }) => {
+  const { t } = useLanguage();
   if (!isOpen) return null;
 
   return (
@@ -32,13 +34,13 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             onClick={onCancel}
             className="flex-1 px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
           >
-            No, keep current
+            {t.confirmDialog.keepCurrent}
           </button>
           <button
             onClick={onConfirm}
             className="flex-1 px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors"
           >
-            Yes, Update
+            {t.confirmDialog.update}
           </button>
         </div>
       </div>

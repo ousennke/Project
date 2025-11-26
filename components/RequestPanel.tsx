@@ -1,9 +1,12 @@
 
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { ApiService, ApiParam } from '../types';
-import { Plus, Trash2, Play, ExternalLink, Code, List, WrapText, Settings, HelpCircle, Square, GripVertical } from 'lucide-react';
+import { Plus, Trash2, Play, ExternalLink, Code, List, WrapText, Settings, HelpCircle, Square, GripVertical, Clock, Zap } from 'lucide-react';
 import ParamConfigModal from './ParamConfigModal';
-import ImageParamInput from './ImageParamInput';
+import FileParamInput from './FileParamInput';
+import StringArrayInput from './StringArrayInput';
+import { useLanguage } from '../i18n';
 
 interface RequestPanelProps {
   service: ApiService;
@@ -11,7 +14,7 @@ interface RequestPanelProps {
   onSend: () => void;
   onStop?: () => void;
   loading: boolean;
-  imgbbApiKey?: string;
+  corsProxy?: string;
 }
 
 const RequestPanel: React.FC<RequestPanelProps> = ({
@@ -20,8 +23,9 @@ const RequestPanel: React.FC<RequestPanelProps> = ({
   onSend,
   onStop,
   loading,
-  imgbbApiKey
+  corsProxy
 }) => {
+  const { t } = useLanguage();
   const [viewMode, setViewMode] = useState<'form' | 'json'>('form');
   const [jsonError, setJsonError] = useState<string | null>(null);
   const [wordWrap, setWordWrap] = useState(true);
@@ -36,6 +40,9 @@ const RequestPanel: React.FC<RequestPanelProps> = ({
   const getJsonFromParams = useCallback(() => {
     const obj: Record<string, any> = {};
     service.params.forEach(p => {
+      // Skip disabled parameters
+      if (p.enabled === false) return;
+
       // Try parsing JSON strings if type is JSON
       if (p.type === 'json' && typeof p.value === 'string') {
         try {
@@ -46,15 +53,30 @@ const RequestPanel: React.FC<RequestPanelProps> = ({
       } else {
         let val = p.value;
         
-        // Parse Image arrays for preview
-        if (p.type === 'image' && typeof val === 'string') {
+        // Parse File arrays for preview
+        if (p.type === 'file' && typeof val === 'string') {
             try {
                 const parsed = JSON.parse(val);
                 if (Array.isArray(parsed)) val = parsed;
             } catch {}
         }
+        
+        // Handle Multi String
+        if (p.type === 'string' && p.enableMultiString) {
+             if (typeof val === 'string') {
+                 try {
+                     const parsed = JSON.parse(val);
+                     if (Array.isArray(parsed)) val = parsed;
+                     else val = [val]; // Wrap single string if parsing fails to array but succeeds to something else (unlikely) or just wrap raw string
+                 } catch {
+                     val = [val]; // Wrap raw string
+                 }
+             } else if (!Array.isArray(val)) {
+                 val = [val]; // Wrap numbers/bools if they somehow got here
+             }
+        }
 
-        // Auto-wrap image_urls and binary_data_base64 if they are SINGLE strings
+        // Auto-wrap image_urls and binary_data_base64 if they are SINGLE strings (Legacy compat)
         if ((p.key === 'image_urls' || p.key === 'binary_data_base64') && typeof val === 'string') {
              val = [val];
         }
@@ -101,6 +123,7 @@ const RequestPanel: React.FC<RequestPanelProps> = ({
       key: '',
       value: '',
       type: 'string',
+      enabled: true,
     };
     // Open modal immediately for the new param
     setEditingParam(newParam);
@@ -123,20 +146,32 @@ const RequestPanel: React.FC<RequestPanelProps> = ({
         
         // Infer type if creating new from JSON
         let type: ApiParam['type'] = 'string';
+        let enableMultiString = false;
+        
         if (typeof value === 'number') {
              type = Number.isInteger(value) ? 'integer' : 'float';
         }
         else if (typeof value === 'boolean') type = 'boolean';
-        else if (typeof value === 'object') type = 'json';
+        else if (typeof value === 'object') {
+            if (Array.isArray(value) && value.every(i => typeof i === 'string')) {
+                type = 'string';
+                enableMultiString = true;
+            } else {
+                type = 'json';
+            }
+        }
 
         return {
           id: existing ? existing.id : `gen_${index}_${Date.now()}`,
           key,
-          value: typeof value === 'object' ? JSON.stringify(value) : (value as string | number | boolean),
+          value: (typeof value === 'object' && !enableMultiString) ? JSON.stringify(value) : (enableMultiString ? JSON.stringify(value) : (value as string | number | boolean)),
           type: existing ? existing.type : type,
-          description: existing ? existing.description : undefined
+          description: existing ? existing.description : undefined,
+          enabled: true,
+          enableMultiString: existing ? existing.enableMultiString : enableMultiString
         };
       });
+      
       onUpdateService({ ...service, params: newParams });
     } catch (e: any) {
       setJsonError(e.message);
@@ -148,14 +183,13 @@ const RequestPanel: React.FC<RequestPanelProps> = ({
   const handleDragStart = (e: React.DragEvent, id: string) => {
     // Allow interacting with inputs without dragging
     const target = e.target as HTMLElement;
-    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.isContentEditable) {
+    if (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'SVG', 'PATH'].includes(target.tagName) || target.isContentEditable || target.closest('button')) {
         e.preventDefault();
         return;
     }
 
     setDraggedParamId(id);
     e.dataTransfer.effectAllowed = 'move';
-    // Optional: set custom drag image if needed
   };
 
   const handleDragOver = (e: React.DragEvent, id: string) => {
@@ -206,34 +240,35 @@ const RequestPanel: React.FC<RequestPanelProps> = ({
     setDropPosition(null);
   };
 
+  const isAsync = service.asyncConfig?.enabled;
+
   return (
     <div className="flex flex-col h-full bg-white relative">
       {/* Header */}
       <div className="flex-none p-6 pb-4 border-b border-gray-200 bg-white z-10 shadow-sm">
-        <div className="flex justify-between items-start mb-4">
-          <div className="min-w-0 flex-1 mr-4">
-            <h1 className="text-xl font-bold text-slate-900 truncate" title={service.name}>{service.name}</h1>
-            <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500 mt-1 font-mono">
-                <span className="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded shrink-0">{service.method}</span>
-                <span className="truncate">{service.serviceName}</span>
-                <span className="text-gray-300">•</span>
-                <span className="truncate">{service.action}</span>
-            </div>
-          </div>
-           {service.docUrl && (
-            <a 
-              href={service.docUrl} 
-              target="_blank" 
-              rel="noreferrer" 
-              className="flex-none flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-800 hover:underline"
-            >
-              Docs <ExternalLink size={14} />
-            </a>
+        
+        {/* Title Row */}
+        <div className="flex items-center gap-3 mb-1 min-w-0">
+          <h1 className="text-xl font-bold text-slate-900 truncate shrink" title={service.name}>{service.name}</h1>
+          
+          {isAsync ? (
+              <span className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100 text-[10px] font-bold uppercase tracking-wide">
+                  <Clock size={10} strokeWidth={2.5} /> {t.common.async}
+              </span>
+          ) : (
+              <span className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100 text-[10px] font-bold uppercase tracking-wide">
+                  <Zap size={10} strokeWidth={2.5} className="fill-blue-400/30" /> {t.common.sync}
+              </span>
           )}
         </div>
 
+        {/* Description Row */}
+        <div className="text-sm text-gray-500 mb-4 truncate">
+            {service.description || t.request.description}
+        </div>
+
         {/* Parameter Controls */}
-        <div className="flex items-center justify-between mt-4 flex-wrap gap-4">
+        <div className="flex items-center justify-between mt-4 gap-4">
           <div className="flex items-center bg-gray-100 p-1 rounded-lg shrink-0">
             <button
               onClick={() => setViewMode('form')}
@@ -241,7 +276,7 @@ const RequestPanel: React.FC<RequestPanelProps> = ({
                 viewMode === 'form' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              <List size={14} /> <span>Params</span>
+              <List size={14} /> <span>{t.request.params}</span>
             </button>
             <button
               onClick={() => setViewMode('json')}
@@ -249,27 +284,48 @@ const RequestPanel: React.FC<RequestPanelProps> = ({
                 viewMode === 'json' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-               <Code size={14}/> <span>JSON</span>
+               <Code size={14}/> <span>{t.request.json}</span>
             </button>
           </div>
 
-          {loading ? (
-              <button
-                onClick={onStop}
-                className="flex items-center gap-2 px-6 py-2 rounded-lg font-medium shadow-md transition-all text-white shrink-0 bg-red-500 hover:bg-red-600 hover:shadow-lg active:transform active:scale-95"
-              >
-                 <Square size={16} fill="currentColor" />
-                 Stop
-              </button>
-          ) : (
-              <button
-                onClick={onSend}
-                className="flex items-center gap-2 px-6 py-2 rounded-lg font-medium shadow-md transition-all text-white shrink-0 bg-indigo-600 hover:bg-indigo-700 hover:shadow-lg active:transform active:scale-95"
-              >
-                <Play size={16} fill="currentColor" />
-                Run Request
-              </button>
-          )}
+          <div className="flex items-center gap-3 shrink-0">
+            {service.docUrl && (
+                <button 
+                  onClick={() => {
+                      if (service.docUrl) window.open(service.docUrl, '_blank');
+                  }}
+                  className="flex items-center gap-2 px-3 py-2 rounded-md font-medium transition-all bg-white text-gray-700 border border-gray-200 shadow-sm hover:text-indigo-600 hover:border-indigo-300 active:scale-95"
+                  title={t.request.apiDocs}
+                >
+                  <ExternalLink size={16} />
+                  <span>{t.request.apiDocs}</span>
+                </button>
+            )}
+
+            <div className="flex items-center gap-2 bg-gray-100 p-0.5 rounded-lg">
+                <button
+                    onClick={onSend}
+                    disabled={loading}
+                    className="flex items-center gap-2 px-6 py-2 rounded-md font-medium shadow-sm transition-all text-white shrink-0 bg-indigo-600 hover:bg-indigo-700 hover:shadow active:transform active:scale-95 disabled:bg-indigo-400"
+                >
+                    {loading ? (
+                         <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    ) : (
+                         <Play size={16} fill="currentColor" />
+                    )}
+                    {t.request.runRequest}
+                </button>
+                {loading && (
+                    <button
+                        onClick={onStop}
+                        className="p-2 rounded-md text-gray-500 hover:text-red-500 hover:bg-white transition-colors"
+                        title={t.request.stop}
+                    >
+                        <Square size={16} fill="currentColor" />
+                    </button>
+                )}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -281,6 +337,9 @@ const RequestPanel: React.FC<RequestPanelProps> = ({
               const isDragTarget = dropTargetId === param.id;
               const showLineTop = isDragTarget && dropPosition === 'before';
               const showLineBottom = isDragTarget && dropPosition === 'after';
+              
+              const type = (param.type as any) === 'image' ? 'file' : param.type;
+              const isEnabled = param.enabled !== false; // default true
 
               return (
                 <div 
@@ -290,7 +349,7 @@ const RequestPanel: React.FC<RequestPanelProps> = ({
                   onDragOver={(e) => handleDragOver(e, param.id)}
                   onDragLeave={handleDragLeave}
                   onDrop={(e) => handleDrop(e, param.id)}
-                  className={`relative flex items-start gap-2 group bg-white p-3 rounded border transition-all shadow-sm ${draggedParamId === param.id ? 'opacity-40 border-dashed border-indigo-300' : 'border-gray-200 hover:border-indigo-300'}`}
+                  className={`relative flex items-start gap-2 group bg-white p-3 rounded border transition-all shadow-sm ${draggedParamId === param.id ? 'opacity-40 border-dashed border-indigo-300' : isEnabled ? 'border-gray-200 hover:border-indigo-300' : 'border-gray-200 opacity-60 grayscale bg-gray-50/50'}`}
                 >
                   {/* Drop Position Indicators */}
                   {showLineTop && <div className="absolute -top-1.5 left-0 right-0 h-1 bg-indigo-500 rounded-full z-20 pointer-events-none shadow" />}
@@ -299,14 +358,14 @@ const RequestPanel: React.FC<RequestPanelProps> = ({
                   {/* Drag Handle */}
                   <div 
                     className="mt-2 cursor-grab text-gray-300 hover:text-gray-500 active:cursor-grabbing flex-shrink-0"
-                    title="Drag to reorder"
+                    title={t.request.dragReorder}
                   >
                       <GripVertical size={16} />
                   </div>
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1 h-5">
-                      <label className="block text-xs font-semibold text-gray-500 truncate">Key</label>
+                      <label className={`block text-xs font-semibold truncate ${isEnabled ? 'text-gray-500' : 'text-gray-400'}`}>{t.request.key}</label>
                       {param.description && (
                           <div className="text-gray-400 group/tooltip relative cursor-help flex items-center">
                               <HelpCircle size={12} />
@@ -319,84 +378,102 @@ const RequestPanel: React.FC<RequestPanelProps> = ({
                     </div>
                     <input
                       type="text"
+                      disabled={!isEnabled}
                       value={param.key}
                       onChange={(e) => {
                           const newParams = service.params.map(p => p.id === param.id ? {...p, key: e.target.value} : p);
                           onUpdateService({...service, params: newParams});
                       }}
-                      className="w-full text-sm font-medium text-slate-800 border border-gray-200 rounded p-1.5 focus:ring-1 focus:ring-indigo-500 outline-none transition-shadow"
+                      className="w-full text-sm font-medium text-slate-800 border border-gray-200 rounded p-1.5 focus:ring-1 focus:ring-indigo-500 outline-none transition-shadow disabled:bg-transparent disabled:text-gray-400"
                       placeholder="Key Name"
                     />
                   </div>
                   
                   <div className="flex-[2] min-w-0">
-                    <label className="block text-xs font-semibold text-gray-500 mb-1 truncate flex items-center justify-between h-5">
-                        <span>Value</span>
-                        <span className="text-[10px] font-mono text-indigo-500 bg-indigo-50 px-1.5 rounded">{param.type}</span>
+                    <label className={`block text-xs font-semibold mb-1 truncate flex items-center justify-between h-5 ${isEnabled ? 'text-gray-500' : 'text-gray-400'}`}>
+                        <span>{t.request.value}</span>
+                        <div className="flex items-center gap-2">
+                             {param.type === 'string' && param.enableMultiString && <span className="text-[10px] bg-purple-50 text-purple-600 px-1 rounded">Array</span>}
+                             <span className={`text-[10px] font-mono px-1.5 rounded ${isEnabled ? 'text-indigo-500 bg-indigo-50' : 'text-gray-400 bg-gray-100'}`}>{type}</span>
+                        </div>
                     </label>
                     
-                    {param.type === 'boolean' ? (
-                      <select
-                        value={String(param.value)}
-                        onChange={(e) => handleParamChange(param.id, e.target.value === 'true')}
-                        className="w-full bg-white text-sm border border-gray-200 rounded p-1.5 focus:ring-1 focus:ring-indigo-500 outline-none"
-                      >
-                        <option value="true">true</option>
-                        <option value="false">false</option>
-                      </select>
-                    ) : param.type === 'json' ? (
-                        <div className="relative">
-                           <textarea
-                              value={typeof param.value === 'string' ? param.value : JSON.stringify(param.value)}
-                              onChange={(e) => handleParamChange(param.id, e.target.value)}
-                              className="w-full text-xs font-mono text-slate-800 border border-gray-200 rounded p-1.5 focus:ring-1 focus:ring-indigo-500 outline-none min-h-[2.4rem] resize-y"
-                              placeholder="{}"
-                              rows={1}
-                           />
-                        </div>
-                    ) : param.type === 'image' ? (
-                        <ImageParamInput 
-                          value={String(param.value)}
-                          onChange={(val) => handleParamChange(param.id, val)}
-                          imgbbApiKey={imgbbApiKey}
-                          enableUrl={param.enableUrlConversion !== false}
-                          enableBase64={param.enableBase64Conversion !== false}
-                          enableMulti={param.enableMultiImage !== false}
-                        />
+                    {isEnabled ? (
+                        <>
+                            {type === 'boolean' ? (
+                            <select
+                                value={String(param.value)}
+                                onChange={(e) => handleParamChange(param.id, e.target.value === 'true')}
+                                className="w-full bg-white text-sm border border-gray-200 rounded p-1.5 focus:ring-1 focus:ring-indigo-500 outline-none"
+                            >
+                                <option value="true">true</option>
+                                <option value="false">false</option>
+                            </select>
+                            ) : type === 'json' ? (
+                                <div className="relative">
+                                <textarea
+                                    value={typeof param.value === 'string' ? param.value : JSON.stringify(param.value)}
+                                    onChange={(e) => handleParamChange(param.id, e.target.value)}
+                                    className="w-full text-xs font-mono text-slate-800 border border-gray-200 rounded p-1.5 focus:ring-1 focus:ring-indigo-500 outline-none min-h-[2.4rem] resize-y"
+                                    placeholder="{}"
+                                    rows={1}
+                                />
+                                </div>
+                            ) : type === 'file' ? (
+                                <FileParamInput 
+                                value={String(param.value)}
+                                onChange={(val) => handleParamChange(param.id, val)}
+                                enableUrl={param.enableUrlConversion !== false}
+                                enableBase64={param.enableBase64Conversion !== false}
+                                enableMulti={param.enableMultiFile !== false}
+                                corsProxy={corsProxy}
+                                />
+                            ) : (type === 'string' && param.enableMultiString) ? (
+                                <StringArrayInput 
+                                    value={param.value} 
+                                    onChange={(val) => handleParamChange(param.id, val)}
+                                />
+                            ) : (
+                            <input
+                                type={type === 'integer' || type === 'float' ? 'number' : 'text'}
+                                step={type === 'float' ? 'any' : '1'}
+                                value={String(param.value)}
+                                onChange={(e) => {
+                                let val: string | number = e.target.value;
+                                if (type === 'integer') val = parseInt(e.target.value);
+                                if (type === 'float') val = parseFloat(e.target.value);
+                                // Handle NaN for empty input
+                                if (typeof val === 'number' && isNaN(val)) val = 0; 
+                                // If input is just text for number fields (like minus sign), keep as is to allow typing
+                                if (e.target.value === '' || e.target.value === '-') val = e.target.value;
+                                
+                                handleParamChange(param.id, val);
+                                }}
+                                className="w-full text-sm text-slate-800 border border-gray-200 rounded p-1.5 focus:ring-1 focus:ring-indigo-500 outline-none transition-shadow"
+                                placeholder="Value"
+                            />
+                            )}
+                        </>
                     ) : (
-                       <input
-                        type={param.type === 'integer' || param.type === 'float' ? 'number' : 'text'}
-                        step={param.type === 'float' ? 'any' : '1'}
-                        value={String(param.value)}
-                        onChange={(e) => {
-                          let val: string | number = e.target.value;
-                          if (param.type === 'integer') val = parseInt(e.target.value);
-                          if (param.type === 'float') val = parseFloat(e.target.value);
-                          // Handle NaN for empty input
-                          if (typeof val === 'number' && isNaN(val)) val = 0; 
-                          // If input is just text for number fields (like minus sign), keep as is to allow typing
-                          if (e.target.value === '' || e.target.value === '-') val = e.target.value;
-                          
-                          handleParamChange(param.id, val);
-                        }}
-                        className="w-full text-sm text-slate-800 border border-gray-200 rounded p-1.5 focus:ring-1 focus:ring-indigo-500 outline-none transition-shadow"
-                        placeholder="Value"
-                      />
+                        <div className="w-full border border-gray-200 rounded p-1.5 bg-gray-50 text-sm text-gray-400 h-[34px] flex items-center">
+                            <span className="truncate italic">Disabled</span>
+                        </div>
                     )}
+
                   </div>
                   
                   <div className="pt-7 shrink-0 flex items-center gap-1">
                     <button
                       onClick={() => setEditingParam(param)}
                       className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
-                      title="Param Settings"
+                      title={t.request.paramSettings}
                     >
                       <Settings size={16} />
                     </button>
                     <button
                       onClick={() => handleDeleteParam(param.id)}
                       className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
-                      title="Delete Param"
+                      title={t.request.deleteParam}
                     >
                       <Trash2 size={16} />
                     </button>
@@ -409,7 +486,7 @@ const RequestPanel: React.FC<RequestPanelProps> = ({
               onClick={handleAddParam}
               className="flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-700 font-medium mt-2 px-2 py-1 rounded hover:bg-indigo-50 w-fit transition-colors"
             >
-              <Plus size={16} /> Add Parameter
+              <Plus size={16} /> {t.request.addParam}
             </button>
           </div>
         ) : (
@@ -425,7 +502,7 @@ const RequestPanel: React.FC<RequestPanelProps> = ({
                     title={wordWrap ? "Disable Word Wrap" : "Enable Word Wrap"}
                 >
                     <WrapText size={14} />
-                    <span>{wordWrap ? 'Wrap' : 'No Wrap'}</span>
+                    <span>{wordWrap ? t.request.wrap : t.request.noWrap}</span>
                 </button>
              </div>
              <textarea

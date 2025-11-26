@@ -1,27 +1,26 @@
 
 import React, { useState, useEffect } from 'react';
-import { Upload, Link as LinkIcon, X, Loader2, FileCode, Check, AlertCircle, Plus } from 'lucide-react';
+import { Upload, Link as LinkIcon, X, Loader2, FileCode, Check, AlertCircle, Plus, FileText } from 'lucide-react';
 import { useLanguage } from '../i18n';
 
-interface ImageParamInputProps {
+interface FileParamInputProps {
   value: string | string[];
   onChange: (value: string) => void;
-  imgbbApiKey?: string;
   enableUrl?: boolean;
   enableBase64?: boolean;
   enableMulti?: boolean;
+  corsProxy?: string;
 }
 
-const DEFAULT_IMGBB_KEY = 'c529a7eb097753d11cb28e5d64a212af';
-
-// Internal state for a single image row
-interface ImageItem {
+// Internal state for a single file row
+interface FileItem {
   id: string;
   file: File | null;
   preview: string | null;
   value: string; // The converted string (URL or Base64)
   processing: 'base64' | 'url' | null;
   error: string | null;
+  fileType: 'image' | 'file';
 }
 
 const cleanValue = (val: string) => {
@@ -34,17 +33,18 @@ const cleanValue = (val: string) => {
     return v;
 };
 
-const ImageParamInput: React.FC<ImageParamInputProps> = ({ 
+const FileParamInput: React.FC<FileParamInputProps> = ({ 
     value, 
     onChange, 
-    imgbbApiKey,
     enableUrl = true,
     enableBase64 = true,
-    enableMulti = true
+    enableMulti = true,
+    corsProxy
 }) => {
   const { t } = useLanguage();
+  
   // Parse initial value into internal items state
-  const [items, setItems] = useState<ImageItem[]>(() => {
+  const [items, setItems] = useState<FileItem[]>(() => {
       let initialValues: string[] = [];
       
       if (Array.isArray(value)) {
@@ -62,22 +62,22 @@ const ImageParamInput: React.FC<ImageParamInputProps> = ({
       }
 
       if (initialValues.length === 0) {
-          return [{ id: 'init_0', file: null, preview: null, value: '', processing: null, error: null }];
+          return [{ id: 'init_0', file: null, preview: null, value: '', processing: null, error: null, fileType: 'file' }];
       }
 
       return initialValues.map((rawVal, idx) => {
           const val = cleanValue(rawVal);
           let preview = null;
           let error = null;
+          let fileType: 'image' | 'file' = 'file';
 
-          if (val.startsWith('http') || val.startsWith('//') || val.startsWith('data:')) {
+          // Attempt to detect if it's an image string
+          const isImgUrl = val.match(/\.(jpeg|jpg|gif|png|webp)($|\?)/i) != null;
+          const isBase64Img = val.startsWith('data:image');
+          
+          if (isImgUrl || isBase64Img) {
               preview = val;
-          } else if (val.length > 50) {
-              // Attempt to restore preview for raw base64
-              preview = `data:image/png;base64,${val}`;
-          } else if (val.length > 0) {
-              // Value exists but cannot be previewed/restored -> Lost Source Error
-              error = "Local image not found";
+              fileType = 'image';
           }
 
           return {
@@ -86,7 +86,8 @@ const ImageParamInput: React.FC<ImageParamInputProps> = ({
             preview: preview,
             value: val,
             processing: null,
-            error: error
+            error: error,
+            fileType: fileType
           };
       });
   });
@@ -110,7 +111,7 @@ const ImageParamInput: React.FC<ImageParamInputProps> = ({
   const handleAddItem = () => {
       setItems(prev => [
           ...prev, 
-          { id: `new_${Date.now()}`, file: null, preview: null, value: '', processing: null, error: null }
+          { id: `new_${Date.now()}`, file: null, preview: null, value: '', processing: null, error: null, fileType: 'file' }
       ]);
   };
 
@@ -125,23 +126,29 @@ const ImageParamInput: React.FC<ImageParamInputProps> = ({
           newItems.splice(index, 1);
           
           if (newItems.length === 0) {
-              return [{ id: `reset_${Date.now()}`, file: null, preview: null, value: '', processing: null, error: null }];
+              return [{ id: `reset_${Date.now()}`, file: null, preview: null, value: '', processing: null, error: null, fileType: 'file' }];
           }
           return newItems;
       });
   };
 
-  const updateItem = (index: number, updates: Partial<ImageItem>) => {
+  const updateItem = (index: number, updates: Partial<FileItem>) => {
       setItems(prev => prev.map((item, i) => i === index ? { ...item, ...updates } : item));
   };
 
   const handleFileSelect = (index: number, file: File) => {
-      const objectUrl = URL.createObjectURL(file);
+      const isImage = file.type.startsWith('image/');
+      let preview = null;
+      if (isImage) {
+          preview = URL.createObjectURL(file);
+      }
+
       updateItem(index, {
           file: file,
-          preview: objectUrl,
+          preview: preview,
           value: '',
-          error: null
+          error: null,
+          fileType: isImage ? 'image' : 'file'
       });
   };
 
@@ -154,7 +161,7 @@ const ImageParamInput: React.FC<ImageParamInputProps> = ({
     const reader = new FileReader();
     reader.onload = (e) => {
       const res = e.target?.result as string;
-      const rawBase64 = res.split(',')[1];
+      const rawBase64 = res.includes(',') ? res.split(',')[1] : res;
       updateItem(index, { value: rawBase64, processing: null });
     };
     reader.onerror = () => {
@@ -163,7 +170,7 @@ const ImageParamInput: React.FC<ImageParamInputProps> = ({
     setTimeout(() => reader.readAsDataURL(item.file!), 300);
   };
 
-  const uploadToImgBB = async (index: number) => {
+  const uploadToTmpfiles = async (index: number) => {
     const item = items[index];
     if (!item.file) return;
 
@@ -171,23 +178,43 @@ const ImageParamInput: React.FC<ImageParamInputProps> = ({
 
     try {
       const formData = new FormData();
-      formData.append('image', item.file);
-      const key = imgbbApiKey || DEFAULT_IMGBB_KEY;
+      formData.append('file', item.file);
       
-      const res = await fetch(`https://api.imgbb.com/1/upload?key=${key}`, {
+      // Use tmpfiles.org as it is generally CORS friendly
+      // If user sets a proxy, use it, otherwise direct
+      const targetUrl = 'https://tmpfiles.org/api/v1/upload';
+      const fetchUrl = corsProxy ? `${corsProxy}${targetUrl}` : targetUrl;
+
+      const res = await fetch(fetchUrl, {
           method: 'POST',
           body: formData
       });
       
-      const data = await res.json();
-      
-      if (data.success) {
-          updateItem(index, { value: data.data.url, processing: null });
-      } else {
-          updateItem(index, { error: data.error?.message || 'ImgBB Upload failed', processing: null });
+      if (!res.ok) {
+           throw new Error(`Upload failed: ${res.statusText}`);
       }
+
+      const data = await res.json();
+
+      if (data.status === 'success' && data.data && data.data.url) {
+         // Convert to direct link
+         // Original: https://tmpfiles.org/12345/image.png
+         // Direct:   https://tmpfiles.org/dl/12345/image.png
+         const originalUrl = data.data.url;
+         const directUrl = originalUrl.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
+         
+         updateItem(index, { value: directUrl, processing: null });
+      } else {
+         throw new Error('Invalid response from tmpfiles.org');
+      }
+      
     } catch (err: any) {
-        updateItem(index, { error: err.message || 'Network error', processing: null });
+        console.error("Upload Error:", err);
+        let msg = err.message || 'Upload failed';
+        if (msg.includes('Failed to fetch')) {
+            msg = 'Network/CORS Error. Tmpfiles.org usually supports CORS, but your browser blocked it. Ensure your VPN is active.';
+        }
+        updateItem(index, { error: msg, processing: null });
     }
   };
 
@@ -222,7 +249,7 @@ const ImageParamInput: React.FC<ImageParamInputProps> = ({
                       <button 
                         onClick={() => handleRemoveItem(index)}
                         className="absolute -top-2 -right-2 bg-white text-gray-400 border border-gray-200 rounded-full p-1 hover:text-red-500 hover:border-red-200 shadow-sm z-10 opacity-0 group-hover:opacity-100 transition-opacity"
-                        title="Remove Image"
+                        title="Remove File"
                       >
                           <X size={12} />
                       </button>
@@ -235,20 +262,27 @@ const ImageParamInput: React.FC<ImageParamInputProps> = ({
                     onDrop={(e) => handleDrop(e, index)}
                     onClick={() => !item.file && document.getElementById(`file-input-${item.id}`)?.click()}
                   >
-                       {item.preview ? (
-                          <div className="relative w-full h-full">
-                              <img 
-                                src={item.preview.startsWith('data') && !item.preview.startsWith('data:image') ? `data:image/png;base64,${item.preview}` : item.preview} 
-                                alt="Preview" 
-                                className="w-full h-full object-cover bg-[url('https://bg.site-shot.com/checkers.png')]" 
-                                onError={(e) => (e.target as HTMLImageElement).style.opacity = '0.5'}
-                              />
+                       {item.file ? (
+                          <div className="relative w-full h-full flex items-center justify-center group/preview">
+                              {item.fileType === 'image' && item.preview ? (
+                                <img 
+                                    src={item.preview} 
+                                    alt="Preview" 
+                                    className="w-full h-full object-cover bg-[url('https://bg.site-shot.com/checkers.png')]" 
+                                />
+                              ) : (
+                                <div className="flex flex-col items-center justify-center text-gray-500 p-1 text-center">
+                                    <FileText size={24} />
+                                    <span className="text-[8px] leading-tight break-all mt-1 line-clamp-2">{item.file.name}</span>
+                                </div>
+                              )}
+                              
                               <button 
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     updateItem(index, { file: null, preview: null, value: '', error: null });
                                 }}
-                                className="absolute top-0 right-0 p-0.5 bg-black/40 text-white hover:bg-red-500"
+                                className="absolute top-0 right-0 p-0.5 bg-black/40 text-white hover:bg-red-500 opacity-0 group-hover/preview:opacity-100 transition-opacity"
                               >
                                   <X size={10} />
                               </button>
@@ -256,14 +290,13 @@ const ImageParamInput: React.FC<ImageParamInputProps> = ({
                        ) : (
                            <div className={`flex flex-col items-center ${item.error ? 'text-red-400' : 'text-gray-400'}`}>
                                {item.error ? <AlertCircle size={16} /> : <Upload size={16} />}
-                               <span className="text-[9px] mt-1">{item.error ? t.imageInput.error : t.imageInput.select}</span>
+                               <span className="text-[9px] mt-1 text-center">{item.error ? t.fileInput.error : t.fileInput.select}</span>
                            </div>
                        )}
                        <input 
                             id={`file-input-${item.id}`}
                             type="file" 
                             className="hidden" 
-                            accept="image/*"
                             onChange={(e) => {
                                 if (e.target.files && e.target.files[0]) handleFileSelect(index, e.target.files[0]);
                             }}
@@ -279,7 +312,7 @@ const ImageParamInput: React.FC<ImageParamInputProps> = ({
                                     <button
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            if (item.file) uploadToImgBB(index);
+                                            if (item.file) uploadToTmpfiles(index);
                                         }}
                                         disabled={!!item.processing || !item.file}
                                         className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-2 rounded text-xs font-medium border transition-all ${
@@ -291,10 +324,10 @@ const ImageParamInput: React.FC<ImageParamInputProps> = ({
                                                     ? 'bg-white border-gray-200 text-gray-600 hover:border-indigo-300 hover:text-indigo-600'
                                                     : 'bg-gray-50 border-gray-200 text-gray-400 opacity-60 cursor-not-allowed'
                                         }`}
-                                        title={item.file ? t.imageInput.convertUrl : t.imageInput.restoredUrl}
+                                        title={item.file ? t.fileInput.convertUrl : t.fileInput.restoredUrl}
                                     >
                                         {item.processing === 'url' ? <Loader2 size={12} className="animate-spin"/> : <LinkIcon size={12} />}
-                                        <span>{t.imageInput.toUrl}</span>
+                                        <span>{item.processing === 'url' ? t.fileInput.uploading : t.fileInput.toUrl}</span>
                                         {valType === 'url' && <Check size={12} className="ml-auto text-green-600"/>}
                                     </button>
                                 )}
@@ -314,21 +347,21 @@ const ImageParamInput: React.FC<ImageParamInputProps> = ({
                                                     ? 'bg-white border-gray-200 text-gray-600 hover:border-amber-300 hover:text-amber-600'
                                                     : 'bg-gray-50 border-gray-200 text-gray-400 opacity-60 cursor-not-allowed'
                                         }`}
-                                        title={item.file ? t.imageInput.convertBase64 : t.imageInput.restoredBase64}
+                                        title={item.file ? t.fileInput.convertBase64 : t.fileInput.restoredBase64}
                                     >
                                         {item.processing === 'base64' ? <Loader2 size={12} className="animate-spin"/> : <FileCode size={12} />}
-                                        <span>{t.imageInput.toBase64}</span>
+                                        <span>{t.fileInput.toBase64}</span>
                                         {valType === 'base64' && <Check size={12} className="ml-auto text-green-600"/>}
                                     </button>
                                 )}
                           </div>
                       ) : item.error ? (
-                          <div className="text-[10px] text-red-600 bg-red-50 p-1.5 rounded border border-red-200 flex items-center gap-1">
-                              <AlertCircle size={12} /> {item.error}
+                          <div className="text-[10px] text-red-600 bg-red-50 p-1.5 rounded border border-red-200 flex items-center gap-1 break-all">
+                              <AlertCircle size={12} className="shrink-0" /> {item.error}
                           </div>
                       ) : (
                           <div className="text-[10px] text-gray-400 italic bg-gray-50 p-1.5 rounded border border-dashed border-gray-200">
-                              Select an image to convert...
+                              Select a file to convert...
                           </div>
                       )}
 
@@ -347,7 +380,7 @@ const ImageParamInput: React.FC<ImageParamInputProps> = ({
                           )}
                           {item.error && (
                               <div className="absolute inset-0 bg-red-50 text-red-600 text-[10px] flex items-center px-2 gap-1 rounded border border-red-100">
-                                  <AlertCircle size={12} /> {item.error}
+                                  <AlertCircle size={12} /> <span className="truncate">Check error above</span>
                               </div>
                           )}
                       </div>
@@ -363,11 +396,11 @@ const ImageParamInput: React.FC<ImageParamInputProps> = ({
             onClick={handleAddItem}
             className="w-full py-2 border border-dashed border-gray-300 rounded-lg text-xs font-medium text-gray-500 hover:text-indigo-600 hover:border-indigo-300 hover:bg-indigo-50 transition-all flex items-center justify-center gap-2"
         >
-            <Plus size={14} /> {t.imageInput.addImage}
+            <Plus size={14} /> {t.fileInput.addFile}
         </button>
       )}
     </div>
   );
 };
 
-export default ImageParamInput;
+export default FileParamInput;

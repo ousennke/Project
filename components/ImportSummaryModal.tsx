@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { CheckCircle, FileJson, ShieldCheck, ShieldAlert } from 'lucide-react';
+import { useLanguage } from '../i18n';
 
 export interface ImportSummaryData {
   serviceCount: number;
@@ -16,6 +17,7 @@ interface ImportSummaryModalProps {
 }
 
 const ImportSummaryModal: React.FC<ImportSummaryModalProps> = ({ isOpen, onClose, summary }) => {
+  const { t } = useLanguage();
   if (!isOpen || !summary) return null;
 
   return (
@@ -26,19 +28,19 @@ const ImportSummaryModal: React.FC<ImportSummaryModalProps> = ({ isOpen, onClose
             <div className="w-12 h-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-4">
                 <CheckCircle size={24} strokeWidth={3} />
             </div>
-            <h2 className="text-xl font-bold text-gray-900">Import Successful</h2>
-            <p className="text-sm text-gray-500 mt-1">Your configuration has been loaded.</p>
+            <h2 className="text-xl font-bold text-gray-900">{t.importSummary.successTitle}</h2>
+            <p className="text-sm text-gray-500 mt-1">{t.importSummary.successMsg}</p>
         </div>
 
         <div className="p-6 space-y-4 bg-gray-50/50">
             
             <div className="grid grid-cols-2 gap-4">
                 <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm text-center">
-                    <div className="text-xs text-gray-500 uppercase font-semibold">Services</div>
+                    <div className="text-xs text-gray-500 uppercase font-semibold">{t.importSummary.services}</div>
                     <div className="text-2xl font-bold text-indigo-600">{summary.serviceCount}</div>
                 </div>
                 <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm text-center">
-                    <div className="text-xs text-gray-500 uppercase font-semibold">Groups</div>
+                    <div className="text-xs text-gray-500 uppercase font-semibold">{t.importSummary.groups}</div>
                     <div className="text-2xl font-bold text-indigo-600">{summary.groupCount}</div>
                 </div>
             </div>
@@ -46,14 +48,14 @@ const ImportSummaryModal: React.FC<ImportSummaryModalProps> = ({ isOpen, onClose
             <div className={`flex items-center gap-3 p-3 rounded-lg border ${summary.hasCredentials ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-gray-100 border-gray-200 text-gray-600'}`}>
                 {summary.hasCredentials ? <ShieldCheck size={20} /> : <ShieldAlert size={20} className="opacity-50"/>}
                 <div className="flex-1">
-                    <div className="text-sm font-bold">{summary.hasCredentials ? 'Credentials Updated' : 'No Credentials Imported'}</div>
-                    <div className="text-xs opacity-80">{summary.hasCredentials ? 'Access Key & Secret Key loaded.' : 'Using existing or empty credentials.'}</div>
+                    <div className="text-sm font-bold">{summary.hasCredentials ? t.importSummary.credsUpdated : t.importSummary.noCreds}</div>
+                    <div className="text-xs opacity-80">{summary.hasCredentials ? t.importSummary.credsLoaded : t.importSummary.credsExisting}</div>
                 </div>
             </div>
 
             <div>
                 <div className="text-xs font-bold text-gray-500 uppercase mb-2 flex items-center gap-1">
-                    <FileJson size={12} /> Imported Services
+                    <FileJson size={12} /> {t.importSummary.importedServices}
                 </div>
                 <div className="bg-white border border-gray-200 rounded-lg max-h-32 overflow-y-auto custom-scrollbar p-2">
                     {summary.serviceNames.length > 0 ? (
@@ -65,7 +67,7 @@ const ImportSummaryModal: React.FC<ImportSummaryModalProps> = ({ isOpen, onClose
                             ))}
                         </ul>
                     ) : (
-                        <div className="text-xs text-gray-400 italic text-center py-2">No services found</div>
+                        <div className="text-xs text-gray-400 italic text-center py-2">{t.importSummary.noServicesFound}</div>
                     )}
                 </div>
             </div>
@@ -77,7 +79,7 @@ const ImportSummaryModal: React.FC<ImportSummaryModalProps> = ({ isOpen, onClose
                 onClick={onClose}
                 className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors shadow-sm"
             >
-                Got it, thanks!
+                {t.importSummary.gotIt}
             </button>
         </div>
 

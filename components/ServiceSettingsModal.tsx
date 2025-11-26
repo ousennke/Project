@@ -1,7 +1,8 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ApiService, ServiceGroup, AsyncConfig } from '../types';
 import { X, Save, Globe, Link as LinkIcon, Layers, Tag, Trash2, AlertTriangle, Repeat, Clock, Code2 } from 'lucide-react';
+import { useLanguage } from '../i18n';
 
 interface ServiceSettingsModalProps {
   isOpen: boolean;
@@ -22,37 +23,49 @@ const ServiceSettingsModal: React.FC<ServiceSettingsModalProps> = ({
   onSave,
   onDelete,
 }) => {
+  const { t } = useLanguage();
   const [formData, setFormData] = useState<ApiService | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('basic');
+  
+  // Track the ID of the service currently loaded in the form to prevent 
+  // unwanted resets when the parent component updates the service object reference.
+  const lastServiceIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (service) {
-      setFormData({ ...service });
-      // Initialize async config if not present
-      if (!service.asyncConfig) {
-          setFormData(prev => prev ? ({
-              ...prev,
-              asyncConfig: {
-                  enabled: false,
-                  pollAction: 'Poll Action',
-                  pollVersion: service.version,
-                  pollMethod: 'POST',
-                  submitResponseIdPath: 'data.task_id',
-                  pollIdParamKey: 'task_id',
-                  pollStatusPath: 'data.status',
-                  pollSuccessValue: 'done',
-                  staticParamsJson: '{"req_key": "..."}',
-                  inheritParams: false,
-                  pollInterval: 2000,
-                  timeoutSeconds: 120,
-                  maxRetries: 150
-              }
-          }) : null);
-      }
+    if (!isOpen) {
+        lastServiceIdRef.current = null;
+        return;
     }
-    setIsDeleting(false);
-    setActiveTab('basic');
+
+    if (service && service.id !== lastServiceIdRef.current) {
+      // Prepare initial data
+      let initialData = { ...service };
+      
+      // Initialize async config if not present
+      if (!initialData.asyncConfig) {
+          initialData.asyncConfig = {
+              enabled: false,
+              pollAction: 'Poll Action',
+              pollVersion: service.version,
+              pollMethod: 'POST',
+              submitResponseIdPath: 'data.task_id',
+              pollIdParamKey: 'task_id',
+              pollStatusPath: 'data.status',
+              pollSuccessValue: 'done',
+              staticParamsJson: '{"req_key": "..."}',
+              inheritParams: false,
+              pollInterval: 2000,
+              timeoutSeconds: 120,
+              maxRetries: 150
+          };
+      }
+
+      setFormData(initialData);
+      setIsDeleting(false);
+      setActiveTab('basic');
+      lastServiceIdRef.current = service.id;
+    }
   }, [service, isOpen]);
 
   if (!isOpen || !formData) return null;
@@ -90,7 +103,7 @@ const ServiceSettingsModal: React.FC<ServiceSettingsModalProps> = ({
         <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-slate-50 flex-shrink-0">
           <div className="flex items-center gap-2 text-slate-800">
             <Layers className="text-indigo-600" size={20} />
-            <h2 className="font-semibold text-lg">Service Configuration</h2>
+            <h2 className="font-semibold text-lg">{t.serviceSettings.title}</h2>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors" type="button">
             <X size={20} />
@@ -103,14 +116,14 @@ const ServiceSettingsModal: React.FC<ServiceSettingsModalProps> = ({
                 onClick={() => setActiveTab('basic')}
                 className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'basic' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
             >
-                Basic Settings
+                {t.serviceSettings.basicSettings}
             </button>
             <button
                 onClick={() => setActiveTab('async')}
                 className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'async' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
             >
                 <Repeat size={14} />
-                Async Workflow
+                {t.serviceSettings.asyncWorkflow}
             </button>
         </div>
 
@@ -121,7 +134,7 @@ const ServiceSettingsModal: React.FC<ServiceSettingsModalProps> = ({
                 {/* Basic Info */}
                 <div className="space-y-4">
                     <div>
-                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Display Name</label>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">{t.serviceSettings.displayName}</label>
                     <input
                         type="text"
                         value={formData.name}
@@ -132,7 +145,7 @@ const ServiceSettingsModal: React.FC<ServiceSettingsModalProps> = ({
                     </div>
                     
                     <div>
-                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Group</label>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">{t.serviceSettings.group}</label>
                     <select
                         value={formData.groupId}
                         onChange={(e) => handleChange('groupId', e.target.value)}
@@ -145,7 +158,7 @@ const ServiceSettingsModal: React.FC<ServiceSettingsModalProps> = ({
                     </div>
 
                     <div>
-                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Description</label>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">{t.serviceSettings.description}</label>
                     <input
                         type="text"
                         value={formData.description || ''}
@@ -161,36 +174,23 @@ const ServiceSettingsModal: React.FC<ServiceSettingsModalProps> = ({
                 {/* API Details */}
                 <div className="space-y-4">
                     <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2">
-                        <Globe size={16} className="text-gray-400"/> API Endpoint
+                        <Globe size={16} className="text-gray-400"/> {t.serviceSettings.apiEndpoint}
                     </h3>
                     
-                    <div className="grid grid-cols-3 gap-3">
-                        <div className="col-span-2">
-                            <label className="block text-xs font-medium text-gray-500 mb-1">Host / Endpoint</label>
-                            <input
-                                type="text"
-                                value={formData.endpoint}
-                                onChange={(e) => handleChange('endpoint', e.target.value)}
-                                className="w-full p-2 border border-gray-300 rounded text-sm font-mono"
-                                placeholder="https://..."
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">Method</label>
-                            <select
-                                value={formData.method}
-                                onChange={(e) => handleChange('method', e.target.value)}
-                                className="w-full p-2 border border-gray-300 rounded text-sm font-mono"
-                            >
-                                <option value="POST">POST</option>
-                                <option value="GET">GET</option>
-                            </select>
-                        </div>
+                    <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">{t.serviceSettings.hostEndpoint}</label>
+                        <input
+                            type="text"
+                            value={formData.endpoint}
+                            onChange={(e) => handleChange('endpoint', e.target.value)}
+                            className="w-full p-2 border border-gray-300 rounded text-sm font-mono"
+                            placeholder="https://..."
+                        />
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
                         <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">Region</label>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">{t.serviceSettings.region}</label>
                             <input
                                 type="text"
                                 value={formData.region}
@@ -200,7 +200,7 @@ const ServiceSettingsModal: React.FC<ServiceSettingsModalProps> = ({
                             />
                         </div>
                         <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">Version</label>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">{t.serviceSettings.version}</label>
                             <input
                                 type="text"
                                 value={formData.version}
@@ -212,7 +212,7 @@ const ServiceSettingsModal: React.FC<ServiceSettingsModalProps> = ({
                     </div>
 
                     <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-1">Action</label>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">{t.serviceSettings.action}</label>
                         <input
                             type="text"
                             value={formData.action}
@@ -228,10 +228,10 @@ const ServiceSettingsModal: React.FC<ServiceSettingsModalProps> = ({
                 {/* Metadata */}
                 <div className="space-y-4">
                     <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2">
-                        <Tag size={16} className="text-gray-400"/> Documentation
+                        <Tag size={16} className="text-gray-400"/> {t.serviceSettings.documentation}
                     </h3>
                     <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-1">Documentation URL</label>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">{t.serviceSettings.docUrl}</label>
                         <div className="relative">
                             <LinkIcon size={14} className="absolute left-3 top-3 text-gray-400"/>
                             <input
@@ -251,8 +251,8 @@ const ServiceSettingsModal: React.FC<ServiceSettingsModalProps> = ({
             <div className="space-y-6">
                 <div className="flex items-center justify-between bg-indigo-50 p-4 rounded-lg border border-indigo-100">
                     <div>
-                        <h4 className="font-semibold text-indigo-900">Enable Async Workflow</h4>
-                        <p className="text-xs text-indigo-700 mt-1">Automatically poll for results after submission.</p>
+                        <h4 className="font-semibold text-indigo-900">{t.serviceSettings.enableAsync}</h4>
+                        <p className="text-xs text-indigo-700 mt-1">{t.serviceSettings.enableAsyncHint}</p>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer">
                         <input 
@@ -270,10 +270,10 @@ const ServiceSettingsModal: React.FC<ServiceSettingsModalProps> = ({
                         
                         {/* Polling Request */}
                         <div>
-                            <h5 className="text-xs font-bold text-gray-500 uppercase mb-3">Polling Request</h5>
+                            <h5 className="text-xs font-bold text-gray-500 uppercase mb-3">{t.serviceSettings.pollingRequest}</h5>
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label className="block text-xs font-medium text-gray-500 mb-1">Poll Action</label>
+                                    <label className="block text-xs font-medium text-gray-500 mb-1">{t.serviceSettings.pollAction}</label>
                                     <input
                                         type="text"
                                         value={formData.asyncConfig.pollAction}
@@ -283,7 +283,7 @@ const ServiceSettingsModal: React.FC<ServiceSettingsModalProps> = ({
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-medium text-gray-500 mb-1">Poll Version</label>
+                                    <label className="block text-xs font-medium text-gray-500 mb-1">{t.serviceSettings.pollVersion}</label>
                                     <input
                                         type="text"
                                         value={formData.asyncConfig.pollVersion}
@@ -298,7 +298,7 @@ const ServiceSettingsModal: React.FC<ServiceSettingsModalProps> = ({
                         {/* JSON Editor for Static Params - Moved Here */}
                         <div>
                             <label className="block text-xs font-medium text-gray-500 mb-1 flex items-center gap-1">
-                                <Code2 size={12} /> Static Poll Params (JSON)
+                                <Code2 size={12} /> {t.serviceSettings.staticParams}
                             </label>
                             <textarea
                                 value={formData.asyncConfig.staticParamsJson || '{}'}
@@ -306,16 +306,16 @@ const ServiceSettingsModal: React.FC<ServiceSettingsModalProps> = ({
                                 className="w-full p-3 border border-gray-300 rounded text-xs font-mono h-24 focus:ring-2 focus:ring-indigo-500 outline-none resize-none bg-slate-50"
                                 placeholder='{"req_key": "..."}'
                             />
-                            <p className="text-[10px] text-gray-400 mt-1">Use this to set fixed parameters like req_key for the polling request.</p>
+                            <p className="text-[10px] text-gray-400 mt-1">{t.serviceSettings.staticParamsHint}</p>
                         </div>
 
                         {/* Polling Logic */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                              <div>
-                                <h5 className="text-xs font-bold text-gray-500 uppercase mb-3">ID Extraction & Passing</h5>
+                                <h5 className="text-xs font-bold text-gray-500 uppercase mb-3">{t.serviceSettings.idExtraction}</h5>
                                 <div className="space-y-3">
                                     <div>
-                                        <label className="block text-xs font-medium text-gray-500 mb-1">ID Key in Poll Request</label>
+                                        <label className="block text-xs font-medium text-gray-500 mb-1">{t.serviceSettings.idKey}</label>
                                         <input
                                             type="text"
                                             value={formData.asyncConfig.pollIdParamKey}
@@ -328,11 +328,11 @@ const ServiceSettingsModal: React.FC<ServiceSettingsModalProps> = ({
                             </div>
 
                             <div>
-                                <h5 className="text-xs font-bold text-gray-500 uppercase mb-3">Status Checking</h5>
+                                <h5 className="text-xs font-bold text-gray-500 uppercase mb-3">{t.serviceSettings.statusChecking}</h5>
                                 <div className="space-y-3">
                                     <div className="flex gap-2">
                                         <div className="flex-1">
-                                            <label className="block text-xs font-medium text-gray-500 mb-1">Success Value</label>
+                                            <label className="block text-xs font-medium text-gray-500 mb-1">{t.serviceSettings.successValue}</label>
                                             <input
                                                 type="text"
                                                 value={formData.asyncConfig.pollSuccessValue}
@@ -342,7 +342,7 @@ const ServiceSettingsModal: React.FC<ServiceSettingsModalProps> = ({
                                             />
                                         </div>
                                         <div className="flex-1">
-                                            <label className="block text-xs font-medium text-gray-500 mb-1">Error Path (Opt)</label>
+                                            <label className="block text-xs font-medium text-gray-500 mb-1">{t.serviceSettings.errorPath}</label>
                                             <input
                                                 type="text"
                                                 value={formData.asyncConfig.pollErrorPath || ''}
@@ -359,11 +359,11 @@ const ServiceSettingsModal: React.FC<ServiceSettingsModalProps> = ({
                          {/* Timing */}
                         <div>
                              <h5 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center gap-2">
-                                <Clock size={12} /> Timing & Options
+                                <Clock size={12} /> {t.serviceSettings.timingOptions}
                              </h5>
                              <div className="grid grid-cols-3 gap-3 mb-3">
                                 <div>
-                                    <label className="block text-xs font-medium text-gray-500 mb-1">Poll Interval (ms)</label>
+                                    <label className="block text-xs font-medium text-gray-500 mb-1">{t.serviceSettings.pollInterval}</label>
                                     <input
                                         type="number"
                                         value={formData.asyncConfig.pollInterval}
@@ -372,7 +372,7 @@ const ServiceSettingsModal: React.FC<ServiceSettingsModalProps> = ({
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-medium text-gray-500 mb-1">Timeout (s)</label>
+                                    <label className="block text-xs font-medium text-gray-500 mb-1">{t.serviceSettings.timeout}</label>
                                     <input
                                         type="number"
                                         value={formData.asyncConfig.timeoutSeconds ?? 120}
@@ -388,7 +388,7 @@ const ServiceSettingsModal: React.FC<ServiceSettingsModalProps> = ({
                                             onChange={(e) => handleAsyncChange('inheritParams', e.target.checked)}
                                             className="rounded text-indigo-600 focus:ring-indigo-500"
                                         />
-                                        Inherit Submit Params
+                                        {t.serviceSettings.inheritParams}
                                     </label>
                                 </div>
                              </div>
@@ -415,12 +415,12 @@ const ServiceSettingsModal: React.FC<ServiceSettingsModalProps> = ({
             {isDeleting ? (
                 <>
                     <AlertTriangle size={16} />
-                    Confirm Delete?
+                    {t.serviceSettings.confirmDelete}
                 </>
             ) : (
                 <>
                     <Trash2 size={16} />
-                    Delete Service
+                    {t.serviceSettings.deleteService}
                 </>
             )}
           </button>
@@ -431,7 +431,7 @@ const ServiceSettingsModal: React.FC<ServiceSettingsModalProps> = ({
                 onClick={onClose}
                 className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
             >
-                Cancel
+                {t.common.cancel}
             </button>
             <button
                 type="button"
@@ -442,7 +442,7 @@ const ServiceSettingsModal: React.FC<ServiceSettingsModalProps> = ({
                 className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-all"
             >
                 <Save size={16} />
-                Save Changes
+                {t.common.save}
             </button>
           </div>
         </div>
