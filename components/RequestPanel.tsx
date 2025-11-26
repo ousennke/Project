@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { ApiService, ApiParam } from '../types';
 import { Plus, Trash2, Play, ExternalLink, Code, List, WrapText, Settings, HelpCircle, Square, GripVertical, Clock, Zap, FileText } from 'lucide-react';
@@ -300,29 +301,18 @@ const RequestPanel: React.FC<RequestPanelProps> = ({
                </button>
             )}
 
-            <div className="flex items-center gap-2 bg-gray-100 p-0.5 rounded-lg">
-                <button
-                    onClick={onSend}
-                    disabled={loading}
-                    className="flex items-center gap-2 px-6 py-2 rounded-md font-medium shadow-sm transition-all text-white shrink-0 bg-indigo-600 hover:bg-indigo-700 hover:shadow active:transform active:scale-95 disabled:bg-indigo-400"
-                >
-                    {loading ? (
-                         <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                    ) : (
-                         <Play size={16} fill="currentColor" />
-                    )}
-                    {t.request.runRequest}
-                </button>
-                {loading && (
-                    <button
-                        onClick={onStop}
-                        className="p-2 rounded-md text-gray-500 hover:text-red-500 hover:bg-white transition-colors"
-                        title={t.request.stop}
-                    >
-                        <Square size={16} fill="currentColor" />
-                    </button>
-                )}
-            </div>
+            <button
+                onClick={loading ? onStop : onSend}
+                disabled={!loading && loading} // Only disable if needed, but here we want click to stop
+                className={`flex items-center gap-2 px-6 py-2 rounded-md font-medium shadow-sm transition-all shrink-0 ${
+                    loading 
+                    ? 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-100' 
+                    : 'bg-indigo-600 text-white hover:bg-indigo-700 hover:shadow disabled:bg-indigo-400'
+                } active:transform active:scale-95`}
+            >
+                {loading ? <Square size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" />}
+                {loading ? t.request.stop : t.request.runRequest}
+            </button>
           </div>
         </div>
       </div>

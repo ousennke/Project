@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
 type Language = 'en' | 'zh';
@@ -24,7 +25,7 @@ const translations = {
       async: "ASYNC",
     },
     sidebar: {
-      volcApi: "VolcAPI",
+      volcApi: "Volc-Vision Ai",
       globalSettings: "Global Settings",
       searchPlaceholder: "Search...",
       addNewGroup: "Add New Group",
@@ -34,12 +35,15 @@ const translations = {
       deleteGroup: "Delete Group",
       renameGroup: "Rename Group",
       addService: "Add Service",
+      domestic: "China",
+      overseas: "Global",
+      selectRegion: "Go to Api Console",
     },
     request: {
       params: "Params",
       json: "JSON",
       runRequest: "Run Request",
-      stop: "Stop",
+      stop: "Stop Request",
       apiDocs: "Doc",
       key: "Key",
       value: "Value",
@@ -73,6 +77,7 @@ const translations = {
       networkImages: "Network & Files",
       dataStorage: "Data & Storage",
       language: "Language / 语言",
+      contactInfo: "VolcEngine - Web Design - Intelligent App",
       
       // Credentials
       volcCredentials: "VolcEngine Credentials",
@@ -109,6 +114,7 @@ const translations = {
       apiEndpoint: "API Endpoint",
       hostEndpoint: "Host / Endpoint",
       region: "Region",
+      serviceName: "Service Name",
       version: "Version",
       action: "Action",
       documentation: "Documentation",
@@ -234,7 +240,7 @@ const translations = {
       async: "异步",
     },
     sidebar: {
-      volcApi: "VolcAPI",
+      volcApi: "火山智能视觉",
       globalSettings: "全局设置",
       searchPlaceholder: "搜索...",
       addNewGroup: "新建分组",
@@ -244,12 +250,15 @@ const translations = {
       deleteGroup: "删除分组",
       renameGroup: "重命名分组",
       addService: "添加服务",
+      domestic: "China",
+      overseas: "Global",
+      selectRegion: "跳转 API 控制台",
     },
     request: {
       params: "参数",
       json: "JSON",
       runRequest: "运行请求",
-      stop: "停止",
+      stop: "停止请求",
       apiDocs: "Doc",
       key: "键 (Key)",
       value: "值 (Value)",
@@ -283,6 +292,7 @@ const translations = {
       networkImages: "网络与文件",
       dataStorage: "数据与存储",
       language: "Language / 语言",
+      contactInfo: "火山引擎 - 官网设计 - 智能应用 API 体验Demo",
       
       // Credentials
       volcCredentials: "VolcEngine 凭证",
@@ -319,6 +329,7 @@ const translations = {
       apiEndpoint: "API Endpoint",
       hostEndpoint: "Host / Endpoint",
       region: "Region",
+      serviceName: "Service Name",
       version: "Version",
       action: "Action",
       documentation: "文档",

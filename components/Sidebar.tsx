@@ -1,5 +1,4 @@
 
-
 import React, { useState } from 'react';
 import { ApiService, ServiceGroup } from '../types';
 import { 
@@ -8,12 +7,13 @@ import {
   Settings, 
   Code2, 
   ChevronRight, 
-  ChevronDown, 
   Folder, 
   Edit2,
   GripVertical,
   Clock,
   Zap,
+  ExternalLink,
+  X,
 } from 'lucide-react';
 import { useLanguage } from '../i18n';
 
@@ -69,6 +69,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [deleteConfirmGroupId, setDeleteConfirmGroupId] = useState<string | null>(null);
+  const [showRegionModal, setShowRegionModal] = useState(false);
   
   // DnD State
   const [draggedItem, setDraggedItem] = useState<DragState | null>(null);
@@ -195,20 +196,71 @@ const Sidebar: React.FC<SidebarProps> = ({
   return (
     <div className="w-full bg-white border-r border-gray-200 h-full flex flex-col flex-shrink-0 select-none">
       {/* Header */}
-      <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-slate-50">
-        <div className="flex items-center gap-2 font-bold text-indigo-600">
-          <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white shadow-indigo-200 shadow-md">
-            <Code2 size={20} />
-          </div>
-          <span className="hidden sm:inline">{t.sidebar.volcApi}</span>
+      <div className="relative z-50">
+        <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-slate-50">
+          <button 
+            onClick={() => setShowRegionModal(true)}
+            className="flex items-center gap-2 font-bold text-indigo-600 hover:text-indigo-800 transition-colors focus:outline-none"
+            title={t.sidebar.selectRegion}
+          >
+            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white shadow-indigo-200 shadow-md">
+              <Code2 size={20} />
+            </div>
+            <span className="hidden sm:inline">{t.sidebar.volcApi}</span>
+          </button>
+          
+          <button 
+            onClick={onOpenGlobalSettings}
+            className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-colors"
+            title={t.sidebar.globalSettings}
+          >
+            <Settings size={18} />
+          </button>
         </div>
-        <button 
-          onClick={onOpenGlobalSettings}
-          className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-colors"
-          title={t.sidebar.globalSettings}
-        >
-          <Settings size={18} />
-        </button>
+
+        {/* Region Modal */}
+        {showRegionModal && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={() => setShowRegionModal(false)}>
+                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden" onClick={e => e.stopPropagation()}>
+                    {/* Modal Header */}
+                    <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-slate-50">
+                        <h3 className="font-bold text-slate-800">{t.sidebar.selectRegion}</h3>
+                        <button onClick={() => setShowRegionModal(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
+                            <X size={20} />
+                        </button>
+                    </div>
+
+                    {/* Modal Content */}
+                    <div className="p-6 grid grid-cols-2 gap-4">
+                        <a 
+                            href="https://console.volcengine.com/ai/overview" 
+                            target="_blank" 
+                            rel="noreferrer"
+                            className="flex flex-col items-center justify-center gap-3 p-4 rounded-xl border border-gray-200 hover:border-indigo-500 hover:bg-indigo-50 group transition-all text-center"
+                            onClick={() => setShowRegionModal(false)}
+                        >
+                            <div className="w-10 h-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center border border-red-100 group-hover:scale-110 transition-transform">
+                                <span className="text-lg font-bold">🇨🇳</span>
+                            </div>
+                            <span className="font-bold text-gray-700 group-hover:text-indigo-700">{t.sidebar.domestic}</span>
+                        </a>
+                        
+                        <a 
+                            href="https://console.byteplus.com/ai/overview" 
+                            target="_blank" 
+                            rel="noreferrer"
+                            className="flex flex-col items-center justify-center gap-3 p-4 rounded-xl border border-gray-200 hover:border-indigo-500 hover:bg-indigo-50 group transition-all text-center"
+                            onClick={() => setShowRegionModal(false)}
+                        >
+                             <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100 group-hover:scale-110 transition-transform">
+                                <span className="text-lg font-bold">🌏</span>
+                            </div>
+                            <span className="font-bold text-gray-700 group-hover:text-indigo-700">{t.sidebar.overseas}</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        )}
       </div>
 
       {/* List */}
@@ -249,7 +301,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                                 onMouseDown={(e) => e.stopPropagation()}
                                 className="p-1 text-gray-400 hover:text-gray-600 mr-1"
                             >
-                                {group.collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+                                {group.collapsed ? <ChevronRight size={14} /> : <ChevronRight size={14} className="rotate-90" />}
                             </button>
                             
                             {editingGroupId === group.id ? (
@@ -373,7 +425,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                                                     <div className="flex items-center gap-1.5 min-w-0">
                                                         <span className="truncate font-medium">{service.name}</span>
                                                         {isAsync ? (
-                                                            <span className="flex-none flex items-center gap-0.5 px-1 py-px rounded bg-purple-50 text-purple-600 border border-purple-100 text-[9px] font-bold uppercase" title={t.serviceSettings.asyncWorkflow}>
+                                                            <span className="flex-none flex items-center gap-0.5 px-1 py-px rounded bg-blue-50 text-blue-600 border border-blue-100 text-[9px] font-bold uppercase" title={t.serviceSettings.asyncWorkflow}>
                                                                 <Clock size={8} strokeWidth={3} /> {t.common.async}
                                                             </span>
                                                         ) : (

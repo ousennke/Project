@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Credentials } from '../types';
 import { X, Shield, AlertTriangle, Download, Upload, Database, KeyRound, Globe, FileText, Settings as SettingsIcon } from 'lucide-react';
@@ -122,6 +123,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 <Database size={16} />
                 {t.settings.dataStorage}
              </button>
+
+             <div className="mt-auto pt-6 px-2">
+                 <div className="text-[10px] text-gray-400 font-medium border-t border-gray-200 pt-3 text-center leading-relaxed">
+                     {t.settings.contactInfo}
+                 </div>
+             </div>
           </div>
 
           {/* Content */}

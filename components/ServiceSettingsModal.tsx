@@ -190,6 +190,16 @@ const ServiceSettingsModal: React.FC<ServiceSettingsModalProps> = ({
 
                     <div className="grid grid-cols-2 gap-3">
                         <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">{t.serviceSettings.serviceName}</label>
+                            <input
+                                type="text"
+                                value={formData.serviceName}
+                                onChange={(e) => handleChange('serviceName', e.target.value)}
+                                className="w-full p-2 border border-gray-300 rounded text-sm font-mono"
+                                placeholder="cv"
+                            />
+                        </div>
+                        <div>
                             <label className="block text-xs font-medium text-gray-500 mb-1">{t.serviceSettings.region}</label>
                             <input
                                 type="text"
@@ -199,7 +209,10 @@ const ServiceSettingsModal: React.FC<ServiceSettingsModalProps> = ({
                                 placeholder="cn-north-1"
                             />
                         </div>
-                        <div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                         <div>
                             <label className="block text-xs font-medium text-gray-500 mb-1">{t.serviceSettings.version}</label>
                             <input
                                 type="text"
@@ -209,17 +222,16 @@ const ServiceSettingsModal: React.FC<ServiceSettingsModalProps> = ({
                                 placeholder="2022-01-01"
                             />
                         </div>
-                    </div>
-
-                    <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-1">{t.serviceSettings.action}</label>
-                        <input
-                            type="text"
-                            value={formData.action}
-                            onChange={(e) => handleChange('action', e.target.value)}
-                            className="w-full p-2 border border-gray-300 rounded text-sm font-mono"
-                            placeholder="ActionName"
-                        />
+                        <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">{t.serviceSettings.action}</label>
+                            <input
+                                type="text"
+                                value={formData.action}
+                                onChange={(e) => handleChange('action', e.target.value)}
+                                className="w-full p-2 border border-gray-300 rounded text-sm font-mono"
+                                placeholder="ActionName"
+                            />
+                        </div>
                     </div>
                 </div>
 

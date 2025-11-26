@@ -108,7 +108,7 @@ const ParamConfigModal: React.FC<ParamConfigModalProps> = ({
                     <option value="float">Float</option>
                     <option value="boolean">Boolean</option>
                     <option value="json">JSON</option>
-                    <option value="file">File (String/Base64)</option>
+                    <option value="file">File (convUrl/Base64)</option>
                 </select>
             </div>
             <div>
