@@ -425,7 +425,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                                                     <div className="flex items-center gap-1.5 min-w-0">
                                                         <span className="truncate font-medium">{service.name}</span>
                                                         {isAsync ? (
-                                                            <span className="flex-none flex items-center gap-0.5 px-1 py-px rounded bg-blue-50 text-blue-600 border border-blue-100 text-[9px] font-bold uppercase" title={t.serviceSettings.asyncWorkflow}>
+                                                            <span className="flex-none flex items-center gap-0.5 px-1 py-px rounded bg-cyan-50 text-cyan-600 border border-cyan-100 text-[9px] font-bold uppercase" title={t.serviceSettings.asyncWorkflow}>
                                                                 <Clock size={8} strokeWidth={3} /> {t.common.async}
                                                             </span>
                                                         ) : (
