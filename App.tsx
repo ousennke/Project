@@ -16,7 +16,7 @@ const DEFAULT_GROUP_ID = 'g_default';
 const DEFAULT_SERVICE_ID = 's_default_1';
 
 const DEFAULT_GROUPS: ServiceGroup[] = [
-    { id: DEFAULT_GROUP_ID, name: 'Image Services', collapsed: false }
+  { id: DEFAULT_GROUP_ID, name: 'Image Services', collapsed: false }
 ];
 
 const DEFAULT_SERVICES: ApiService[] = [
@@ -47,7 +47,7 @@ const DEFAULT_SERVICES: ApiService[] = [
 
 // Helper to get value from nested object using string path like "data.task_id"
 const getValueByPath = (obj: any, path: string) => {
-    return path.split('.').reduce((acc, part) => acc && acc[part], obj);
+  return path.split('.').reduce((acc, part) => acc && acc[part], obj);
 };
 
 // Simple string hash for change detection
@@ -56,7 +56,7 @@ const simpleHash = (str: string) => {
   for (let i = 0; i < str.length; i++) {
     const char = str.charCodeAt(i);
     hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; 
+    hash = hash & hash;
   }
   return hash.toString();
 };
@@ -65,13 +65,13 @@ const AppContent: React.FC = () => {
   const [groups, setGroups] = useState<ServiceGroup[]>(DEFAULT_GROUPS);
   const [services, setServices] = useState<ApiService[]>(DEFAULT_SERVICES);
   const [selectedServiceId, setSelectedServiceId] = useState<string>(DEFAULT_SERVICES[0].id);
-  
+
   const [credentials, setCredentials] = useState<Credentials>({
     accessKeyId: '',
     secretAccessKey: '',
   });
   const [proxyUrl, setProxyUrl] = useState('');
-  
+
   // Modal States
   const [showSettings, setShowSettings] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('general');
@@ -79,7 +79,7 @@ const AppContent: React.FC = () => {
   const [importSummary, setImportSummary] = useState<ImportSummaryData | null>(null);
   const [showUpdatePrompt, setShowUpdatePrompt] = useState(false);
   const [pendingConfig, setPendingConfig] = useState<any | null>(null);
-  
+
   // Import States
   const [importModeData, setImportModeData] = useState<any | null>(null); // Holds data for Mode Selection
   const [importSelectionData, setImportSelectionData] = useState<any | null>(null); // Holds data for Granular Selection
@@ -99,24 +99,24 @@ const AppContent: React.FC = () => {
   useEffect(() => {
     const storedCreds = localStorage.getItem('volc_playground_creds');
     if (storedCreds) {
-      try { setCredentials(JSON.parse(storedCreds)); } catch(e){}
+      try { setCredentials(JSON.parse(storedCreds)); } catch (e) { }
     }
     const storedProxy = localStorage.getItem('volc_playground_proxy');
     if (storedProxy) setProxyUrl(storedProxy);
-    
+
     const storedConfig = localStorage.getItem('volc_playground_config');
     if (storedConfig) {
-        try {
-            const config = JSON.parse(storedConfig);
-            if (config.groups && config.services) {
-                setGroups(config.groups);
-                setServices(config.services);
-                // Select first service if available
-                if (config.services.length > 0) {
-                    setSelectedServiceId(config.services[0].id);
-                }
-            }
-        } catch(e){}
+      try {
+        const config = JSON.parse(storedConfig);
+        if (config.groups && config.services) {
+          setGroups(config.groups);
+          setServices(config.services);
+          // Select first service if available
+          if (config.services.length > 0) {
+            setSelectedServiceId(config.services[0].id);
+          }
+        }
+      } catch (e) { }
     }
   }, []);
 
@@ -126,11 +126,11 @@ const AppContent: React.FC = () => {
       try {
         const res = await fetch('./default.json');
         if (!res.ok) return;
-        
+
         const configText = await res.text();
         const currentHash = simpleHash(configText);
         const lastHash = localStorage.getItem('volc_playground_default_hash');
-        
+
         // If we've already seen this exact version of default.json (accepted or rejected), do nothing
         if (currentHash === lastHash) return;
 
@@ -141,9 +141,9 @@ const AppContent: React.FC = () => {
 
         // If no local config, apply default.json immediately (First run)
         if (!hasLocalConfig) {
-           applyConfig(config);
-           localStorage.setItem('volc_playground_default_hash', currentHash);
-           return;
+          applyConfig(config);
+          localStorage.setItem('volc_playground_default_hash', currentHash);
+          return;
         }
 
         // If local config exists but a new default.json is detected, prompt user
@@ -160,61 +160,65 @@ const AppContent: React.FC = () => {
 
   // Auto-save config
   useEffect(() => {
-      const config = { groups, services };
+    const config = { groups, services };
+    try {
       localStorage.setItem('volc_playground_config', JSON.stringify(config));
+    } catch (e) {
+      console.error("Failed to save config to localStorage (likely quota exceeded):", e);
+    }
   }, [groups, services]);
 
   const applyConfig = (config: any) => {
-      if (config.groups) setGroups(config.groups);
-      if (config.services) {
-          setServices(config.services);
-          if (config.services.length > 0) {
-              setSelectedServiceId(config.services[0].id);
-          }
+    if (config.groups) setGroups(config.groups);
+    if (config.services) {
+      setServices(config.services);
+      if (config.services.length > 0) {
+        setSelectedServiceId(config.services[0].id);
       }
-      if (config.credentials) {
-          setCredentials(config.credentials);
-          localStorage.setItem('volc_playground_creds', JSON.stringify(config.credentials));
-      }
+    }
+    if (config.credentials) {
+      setCredentials(config.credentials);
+      localStorage.setItem('volc_playground_creds', JSON.stringify(config.credentials));
+    }
   };
 
   const handleConfirmUpdate = () => {
-      if (pendingConfig) {
-          applyConfig(pendingConfig.config);
-          localStorage.setItem('volc_playground_default_hash', pendingConfig.hash);
-          setShowUpdatePrompt(false);
-          
-          // Show summary of what changed
-          setImportSummary({
-              serviceCount: pendingConfig.config.services.length,
-              groupCount: pendingConfig.config.groups.length,
-              hasCredentials: !!pendingConfig.config.credentials,
-              serviceNames: pendingConfig.config.services.map((s: any) => s.name)
-          });
-          setPendingConfig(null);
-      }
+    if (pendingConfig) {
+      applyConfig(pendingConfig.config);
+      localStorage.setItem('volc_playground_default_hash', pendingConfig.hash);
+      setShowUpdatePrompt(false);
+
+      // Show summary of what changed
+      setImportSummary({
+        serviceCount: pendingConfig.config.services.length,
+        groupCount: pendingConfig.config.groups.length,
+        hasCredentials: !!pendingConfig.config.credentials,
+        serviceNames: pendingConfig.config.services.map((s: any) => s.name)
+      });
+      setPendingConfig(null);
+    }
   };
 
   const handleCancelUpdate = () => {
-      if (pendingConfig) {
-          // Mark this hash as seen so we don't prompt again for this specific update
-          localStorage.setItem('volc_playground_default_hash', pendingConfig.hash);
-          setShowUpdatePrompt(false);
-          setPendingConfig(null);
-      }
+    if (pendingConfig) {
+      // Mark this hash as seen so we don't prompt again for this specific update
+      localStorage.setItem('volc_playground_default_hash', pendingConfig.hash);
+      setShowUpdatePrompt(false);
+      setPendingConfig(null);
+    }
   };
 
   // --- Resizing Logic ---
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isResizing) return;
-      
+
       if (isResizing === 'sidebar') {
         const newWidth = Math.max(200, Math.min(500, e.clientX));
         setSidebarWidth(newWidth);
       } else if (isResizing === 'request') {
         const offset = e.clientX - sidebarWidth;
-        const maxW = window.innerWidth - sidebarWidth - 300; 
+        const maxW = window.innerWidth - sidebarWidth - 300;
         const newWidth = Math.max(480, Math.min(maxW, offset));
         setRequestPanelWidth(newWidth);
       }
@@ -246,8 +250,8 @@ const AppContent: React.FC = () => {
   };
 
   const handleSaveProxy = (url: string) => {
-      setProxyUrl(url);
-      localStorage.setItem('volc_playground_proxy', url);
+    setProxyUrl(url);
+    localStorage.setItem('volc_playground_proxy', url);
   };
 
   // -- Data Manipulation Handlers --
@@ -261,17 +265,17 @@ const AppContent: React.FC = () => {
   };
 
   const handleDeleteGroup = (id: string) => {
-      setGroups(groups.filter(g => g.id !== id));
-      const newServices = services.filter(s => s.groupId !== id);
-      setServices(newServices);
-      if (selectedServiceId && services.find(s => s.id === selectedServiceId)?.groupId === id) {
-          if (newServices.length > 0) setSelectedServiceId(newServices[0].id);
-          else setSelectedServiceId('');
-      }
+    setGroups(groups.filter(g => g.id !== id));
+    const newServices = services.filter(s => s.groupId !== id);
+    setServices(newServices);
+    if (selectedServiceId && services.find(s => s.id === selectedServiceId)?.groupId === id) {
+      if (newServices.length > 0) setSelectedServiceId(newServices[0].id);
+      else setSelectedServiceId('');
+    }
   };
 
   const handleToggleGroup = (id: string) => {
-      setGroups(groups.map(g => g.id === id ? { ...g, collapsed: !g.collapsed } : g));
+    setGroups(groups.map(g => g.id === id ? { ...g, collapsed: !g.collapsed } : g));
   };
 
   const handleAddService = (groupId: string) => {
@@ -280,7 +284,7 @@ const AppContent: React.FC = () => {
       id: `s_${Date.now()}`,
       groupId,
       name: 'New Service',
-      params: DEFAULT_SERVICES[0].params.map(p => ({...p, id: `p_${Date.now()}_${Math.random()}`, enabled: true}))
+      params: DEFAULT_SERVICES[0].params.map(p => ({ ...p, id: `p_${Date.now()}_${Math.random()}`, enabled: true }))
     };
     setServices([...services, newService]);
     setSelectedServiceId(newService.id);
@@ -290,15 +294,15 @@ const AppContent: React.FC = () => {
     const newServices = services.filter(s => s.id !== id);
     setServices(newServices);
     if (selectedServiceId === id) {
-        const deletedService = services.find(s => s.id === id);
-        const groupServices = newServices.filter(s => s.groupId === deletedService?.groupId);
-        if (groupServices.length > 0) {
-            setSelectedServiceId(groupServices[0].id);
-        } else if (newServices.length > 0) {
-            setSelectedServiceId(newServices[0].id);
-        } else {
-            setSelectedServiceId('');
-        }
+      const deletedService = services.find(s => s.id === id);
+      const groupServices = newServices.filter(s => s.groupId === deletedService?.groupId);
+      if (groupServices.length > 0) {
+        setSelectedServiceId(groupServices[0].id);
+      } else if (newServices.length > 0) {
+        setSelectedServiceId(newServices[0].id);
+      } else {
+        setSelectedServiceId('');
+      }
     }
   };
 
@@ -307,7 +311,7 @@ const AppContent: React.FC = () => {
   };
 
   const handleMoveService = (serviceId: string, targetGroupId: string) => {
-      setServices(services.map(s => s.id === serviceId ? { ...s, groupId: targetGroupId } : s));
+    setServices(services.map(s => s.id === serviceId ? { ...s, groupId: targetGroupId } : s));
   };
 
   const handleReorderService = (sourceId: string, targetId: string, position: 'before' | 'after') => {
@@ -317,14 +321,14 @@ const AppContent: React.FC = () => {
     const [moved] = newServices.splice(sourceIndex, 1);
     const targetIndex = newServices.findIndex(s => s.id === targetId);
     if (targetIndex === -1) {
-        newServices.push(moved);
+      newServices.push(moved);
     } else {
-        const insertIndex = position === 'before' ? targetIndex : targetIndex + 1;
-        const targetService = services.find(s => s.id === targetId);
-        if (targetService && moved.groupId !== targetService.groupId) {
-            moved.groupId = targetService.groupId;
-        }
-        newServices.splice(insertIndex, 0, moved);
+      const insertIndex = position === 'before' ? targetIndex : targetIndex + 1;
+      const targetService = services.find(s => s.id === targetId);
+      if (targetService && moved.groupId !== targetService.groupId) {
+        moved.groupId = targetService.groupId;
+      }
+      newServices.splice(insertIndex, 0, moved);
     }
     setServices(newServices);
   };
@@ -336,10 +340,10 @@ const AppContent: React.FC = () => {
     const [moved] = newGroups.splice(sourceIndex, 1);
     const targetIndex = newGroups.findIndex(g => g.id === targetId);
     if (targetIndex === -1) {
-        newGroups.push(moved);
+      newGroups.push(moved);
     } else {
-        const insertIndex = position === 'before' ? targetIndex : targetIndex + 1;
-        newGroups.splice(insertIndex, 0, moved);
+      const insertIndex = position === 'before' ? targetIndex : targetIndex + 1;
+      newGroups.splice(insertIndex, 0, moved);
     }
     setGroups(newGroups);
   };
@@ -348,7 +352,7 @@ const AppContent: React.FC = () => {
   const handleExportConfig = (includeCredentials: boolean) => {
     const config: any = { groups, services, version: 1 };
     if (includeCredentials) {
-        config.credentials = credentials;
+      config.credentials = credentials;
     }
     const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -362,83 +366,83 @@ const AppContent: React.FC = () => {
   const handleImportConfig = (file: File) => {
     const reader = new FileReader();
     reader.onload = (e) => {
-        try {
-            const content = e.target?.result as string;
-            const config = JSON.parse(content);
-            if (Array.isArray(config.groups) && Array.isArray(config.services)) {
-                // Ensure params have 'enabled' prop for backward compatibility
-                if (config.services) {
-                    config.services = config.services.map((s: any) => ({
-                        ...s,
-                        params: s.params.map((p: any) => ({
-                            ...p,
-                            enabled: p.enabled !== undefined ? p.enabled : true
-                        }))
-                    }));
-                }
-                // Open Mode Selection Modal first
-                setImportModeData(config);
-                setShowSettings(false); 
-            } else {
-                alert('Invalid configuration format');
-            }
-        } catch (err) {
-            alert('Failed to parse configuration file');
+      try {
+        const content = e.target?.result as string;
+        const config = JSON.parse(content);
+        if (Array.isArray(config.groups) && Array.isArray(config.services)) {
+          // Ensure params have 'enabled' prop for backward compatibility
+          if (config.services) {
+            config.services = config.services.map((s: any) => ({
+              ...s,
+              params: s.params.map((p: any) => ({
+                ...p,
+                enabled: p.enabled !== undefined ? p.enabled : true
+              }))
+            }));
+          }
+          // Open Mode Selection Modal first
+          setImportModeData(config);
+          setShowSettings(false);
+        } else {
+          alert('Invalid configuration format');
         }
+      } catch (err) {
+        alert('Failed to parse configuration file');
+      }
     };
     reader.readAsText(file);
   };
 
   const handleImportModeSelect = (mode: 'overwrite' | 'merge', importCreds: boolean) => {
-      if (!importModeData) return;
+    if (!importModeData) return;
 
-      if (mode === 'overwrite') {
-          // Full Replacement Logic
-          setGroups(importModeData.groups);
-          setServices(importModeData.services);
-          if (importModeData.services.length > 0) {
-              setSelectedServiceId(importModeData.services[0].id);
-          } else {
-              setSelectedServiceId('');
-          }
-
-          let credsUpdated = false;
-          if (importCreds && importModeData.credentials) {
-              setCredentials(importModeData.credentials);
-              localStorage.setItem('volc_playground_creds', JSON.stringify(importModeData.credentials));
-              credsUpdated = true;
-          }
-
-          setImportSummary({
-              serviceCount: importModeData.services.length,
-              groupCount: importModeData.groups.length,
-              hasCredentials: credsUpdated,
-              serviceNames: importModeData.services.map((s: any) => s.name)
-          });
-          setImportModeData(null); // Close modal
-
+    if (mode === 'overwrite') {
+      // Full Replacement Logic
+      setGroups(importModeData.groups);
+      setServices(importModeData.services);
+      if (importModeData.services.length > 0) {
+        setSelectedServiceId(importModeData.services[0].id);
       } else {
-          // Merge Logic: Proceed to Selection Modal
-          // Pass the credential decision to the next step via state or handle it later
-          setPendingImportCreds(importCreds);
-          setImportSelectionData(importModeData);
-          setImportModeData(null); // Close mode modal, open selection modal
+        setSelectedServiceId('');
       }
+
+      let credsUpdated = false;
+      if (importCreds && importModeData.credentials) {
+        setCredentials(importModeData.credentials);
+        localStorage.setItem('volc_playground_creds', JSON.stringify(importModeData.credentials));
+        credsUpdated = true;
+      }
+
+      setImportSummary({
+        serviceCount: importModeData.services.length,
+        groupCount: importModeData.groups.length,
+        hasCredentials: credsUpdated,
+        serviceNames: importModeData.services.map((s: any) => s.name)
+      });
+      setImportModeData(null); // Close modal
+
+    } else {
+      // Merge Logic: Proceed to Selection Modal
+      // Pass the credential decision to the next step via state or handle it later
+      setPendingImportCreds(importCreds);
+      setImportSelectionData(importModeData);
+      setImportModeData(null); // Close mode modal, open selection modal
+    }
   };
 
   const handleConfirmImportSelection = (selectedIndices: number[]) => {
     if (!importSelectionData) return;
-    
+
     const selectedServices = selectedIndices.map(i => importSelectionData.services[i]);
     const { groups: importedGroups, credentials: importedCreds } = importSelectionData;
 
     // 1. Merge Groups
     const newGroups = [...groups];
     importedGroups.forEach((impG: ServiceGroup) => {
-        const existingGIndex = newGroups.findIndex(g => g.id === impG.id);
-        if (existingGIndex === -1) {
-            newGroups.push(impG);
-        }
+      const existingGIndex = newGroups.findIndex(g => g.id === impG.id);
+      if (existingGIndex === -1) {
+        newGroups.push(impG);
+      }
     });
 
     // 2. Merge Services
@@ -447,34 +451,34 @@ const AppContent: React.FC = () => {
     let updatedCount = 0;
 
     selectedServices.forEach((impS: ApiService) => {
-        // Match by Name as requested
-        const existingIndex = newServices.findIndex(s => s.name === impS.name);
-        
-        if (existingIndex >= 0) {
-            // UPDATE: Keep local ID, overwrite content
-            const existingId = newServices[existingIndex].id;
-            newServices[existingIndex] = { ...impS, id: existingId };
-            updatedCount++;
-        } else {
-            // ADD: Check ID collision. 
-            let newId = impS.id;
-            if (newServices.some(s => s.id === newId)) {
-                 newId = `s_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-            }
-            newServices.push({ ...impS, id: newId });
-            addedCount++;
+      // Match by Name as requested
+      const existingIndex = newServices.findIndex(s => s.name === impS.name);
+
+      if (existingIndex >= 0) {
+        // UPDATE: Keep local ID, overwrite content
+        const existingId = newServices[existingIndex].id;
+        newServices[existingIndex] = { ...impS, id: existingId };
+        updatedCount++;
+      } else {
+        // ADD: Check ID collision. 
+        let newId = impS.id;
+        if (newServices.some(s => s.id === newId)) {
+          newId = `s_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         }
+        newServices.push({ ...impS, id: newId });
+        addedCount++;
+      }
     });
 
     setGroups(newGroups);
     setServices(newServices);
-    
+
     // Apply Credentials if selected in the previous Mode modal
     let credsUpdated = false;
     if (pendingImportCreds && importedCreds) {
-        setCredentials(importedCreds);
-        localStorage.setItem('volc_playground_creds', JSON.stringify(importedCreds));
-        credsUpdated = true;
+      setCredentials(importedCreds);
+      localStorage.setItem('volc_playground_creds', JSON.stringify(importedCreds));
+      credsUpdated = true;
     }
 
     setImportSelectionData(null);
@@ -482,62 +486,62 @@ const AppContent: React.FC = () => {
 
     // Show Summary
     setImportSummary({
-        serviceCount: addedCount + updatedCount,
-        groupCount: newGroups.length, 
-        hasCredentials: credsUpdated,
-        serviceNames: selectedServices.map((s: ApiService) => s.name)
+      serviceCount: addedCount + updatedCount,
+      groupCount: newGroups.length,
+      hasCredentials: credsUpdated,
+      serviceNames: selectedServices.map((s: ApiService) => s.name)
     });
   };
 
   // -- HTTP Logic --
 
   const makeRequest = async (service: ApiService, action: string, version: string, method: string, payload: any, signal?: AbortSignal) => {
-      const queryParams = {
-        Action: action,
-        Version: version,
-      };
+    const queryParams = {
+      Action: action,
+      Version: version,
+    };
 
-      const bodyString = JSON.stringify(payload);
+    const bodyString = JSON.stringify(payload);
 
-      const signatureHeaders = signRequest({
-        method: method,
-        pathname: '/', 
-        params: queryParams,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: bodyString,
-        region: service.region,
-        serviceName: service.serviceName,
-        accessKeyId: credentials.accessKeyId,
-        secretAccessKey: credentials.secretAccessKey,
-      });
+    const signatureHeaders = signRequest({
+      method: method,
+      pathname: '/',
+      params: queryParams,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: bodyString,
+      region: service.region,
+      serviceName: service.serviceName,
+      accessKeyId: credentials.accessKeyId,
+      secretAccessKey: credentials.secretAccessKey,
+    });
 
-      let fetchUrl = service.endpoint;
-      if (proxyUrl) {
-        fetchUrl = `${proxyUrl}${service.endpoint}`;
-      }
+    let fetchUrl = service.endpoint;
+    if (proxyUrl) {
+      fetchUrl = `${proxyUrl}${service.endpoint}`;
+    }
 
-      const url = new URL(fetchUrl);
-      Object.entries(queryParams).forEach(([k, v]) => url.searchParams.append(k, v));
+    const url = new URL(fetchUrl);
+    Object.entries(queryParams).forEach(([k, v]) => url.searchParams.append(k, v));
 
-      return fetch(url.toString(), {
-        method: method,
-        headers: signatureHeaders,
-        body: bodyString,
-        signal: signal,
-      });
+    return fetch(url.toString(), {
+      method: method,
+      headers: signatureHeaders,
+      body: bodyString,
+      signal: signal,
+    });
   };
 
   const selectedService = services.find(s => s.id === selectedServiceId);
 
   const handleStopRequest = () => {
-      if (abortControllerRef.current) {
-          abortControllerRef.current.abort();
-          abortControllerRef.current = null;
-      }
-      setLoading(false);
-      setResponseData(prev => prev ? { ...prev, isPolling: false } : null);
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setLoading(false);
+    setResponseData(prev => prev ? { ...prev, isPolling: false } : null);
   };
 
   const handleSendRequest = async () => {
@@ -552,15 +556,15 @@ const AppContent: React.FC = () => {
     // Check for empty file/string conversions - ONLY enabled params
     const pendingFiles = selectedService.params.filter(p => p.enabled !== false && p.type === 'file' && (!p.value || String(p.value).trim() === ''));
     if (pendingFiles.length > 0) {
-        alert(`Parameter "${pendingFiles[0].key}" has a file selected but not converted or empty. Please click "To URL" or "To Base64" before running the request.`);
-        return;
+      alert(`Parameter "${pendingFiles[0].key}" has a file selected but not converted or empty. Please click "To URL" or "To Base64" before running the request.`);
+      return;
     }
     // --- VALIDATION END ---
 
     if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
+      abortControllerRef.current.abort();
     }
-    
+
     // Create a local controller for this specific request session
     const controller = new AbortController();
     abortControllerRef.current = controller;
@@ -573,173 +577,173 @@ const AppContent: React.FC = () => {
     try {
       const payload: Record<string, any> = {};
       selectedService.params.forEach(p => {
-         // Skip disabled params
-         if (p.enabled === false) return;
+        // Skip disabled params
+        if (p.enabled === false) return;
 
-         if (p.type === 'json' && typeof p.value === 'string') {
-            try { payload[p.key] = JSON.parse(p.value); } catch { payload[p.key] = p.value; }
-         } else {
-             let val = p.value;
-             
-             // Special handling for File type: 
-             // If value looks like a JSON array string (from multiple file uploads), parse it back to array
-             if (p.type === 'file' && typeof val === 'string') {
-                 try {
-                     const parsed = JSON.parse(val);
-                     if (Array.isArray(parsed)) val = parsed;
-                 } catch {}
-             }
+        if (p.type === 'json' && typeof p.value === 'string') {
+          try { payload[p.key] = JSON.parse(p.value); } catch { payload[p.key] = p.value; }
+        } else {
+          let val = p.value;
 
-             // Auto-wrap image_urls and binary_data_base64 if they are SINGLE strings
-             if ((p.key === 'image_urls' || p.key === 'binary_data_base64') && typeof val === 'string') {
-                 val = [val];
-             }
-             payload[p.key] = val;
-         }
+          // Special handling for File type: 
+          // If value looks like a JSON array string (from multiple file uploads), parse it back to array
+          if (p.type === 'file' && typeof val === 'string') {
+            try {
+              const parsed = JSON.parse(val);
+              if (Array.isArray(parsed)) val = parsed;
+            } catch { }
+          }
+
+          // Auto-wrap image_urls and binary_data_base64 if they are SINGLE strings
+          if ((p.key === 'image_urls' || p.key === 'binary_data_base64') && typeof val === 'string') {
+            val = [val];
+          }
+          payload[p.key] = val;
+        }
       });
 
       const reqStart = Date.now();
       const res = await makeRequest(
-          selectedService, 
-          selectedService.action, 
-          selectedService.version, 
-          selectedService.method, 
-          payload,
-          controller.signal // Pass signal explicitly
+        selectedService,
+        selectedService.action,
+        selectedService.version,
+        selectedService.method,
+        payload,
+        controller.signal // Pass signal explicitly
       );
 
       const data = await res.json();
       const duration = Date.now() - reqStart;
-      
+
       setResponseData({
         status: res.status,
         statusText: res.statusText,
-        headers: {}, 
+        headers: {},
         body: data,
         timestamp: duration,
         isPolling: false
       });
 
       if (!res.ok) {
-          throw new Error(data?.ResponseMetadata?.Error?.Message || `HTTP Error ${res.status}`);
+        throw new Error(data?.ResponseMetadata?.Error?.Message || `HTTP Error ${res.status}`);
       }
 
       if (selectedService.asyncConfig?.enabled) {
-          const config = selectedService.asyncConfig;
-          const taskId = getValueByPath(data, config.submitResponseIdPath);
-          
-          if (!taskId) {
-              throw new Error(`Async enabled, but could not find ID at '${config.submitResponseIdPath}' in response.`);
+        const config = selectedService.asyncConfig;
+        const taskId = getValueByPath(data, config.submitResponseIdPath);
+
+        if (!taskId) {
+          throw new Error(`Async enabled, but could not find ID at '${config.submitResponseIdPath}' in response.`);
+        }
+
+        setResponseData(prev => prev ? { ...prev, isPolling: true } : null);
+
+        const maxDuration = (config.timeoutSeconds || 120) * 1000;
+        const pollStartTime = Date.now();
+
+        const pollLoop = async () => {
+          // Check timeout
+          if (Date.now() - pollStartTime > maxDuration) {
+            setError(`Polling timed out after ${config.timeoutSeconds || 120} seconds.`);
+            setLoading(false);
+            setResponseData(prev => prev ? { ...prev, isPolling: false } : null);
+            return;
           }
 
-          setResponseData(prev => prev ? { ...prev, isPolling: true } : null);
-          
-          const maxDuration = (config.timeoutSeconds || 120) * 1000;
-          const pollStartTime = Date.now();
+          // Check cancellation using the local controller variable
+          if (controller.signal.aborted) {
+            return;
+          }
 
-          const pollLoop = async () => {
-              // Check timeout
-              if (Date.now() - pollStartTime > maxDuration) {
-                  setError(`Polling timed out after ${config.timeoutSeconds || 120} seconds.`);
-                  setLoading(false);
-                  setResponseData(prev => prev ? { ...prev, isPolling: false } : null);
-                  return;
-              }
+          await new Promise(resolve => setTimeout(resolve, config.pollInterval));
 
-              // Check cancellation using the local controller variable
-              if (controller.signal.aborted) {
-                  return;
-              }
+          // Check cancellation again after wait
+          if (controller.signal.aborted) {
+            return;
+          }
 
-              await new Promise(resolve => setTimeout(resolve, config.pollInterval));
-              
-              // Check cancellation again after wait
-              if (controller.signal.aborted) {
-                  return;
-              }
+          try {
+            const pollPayload: Record<string, any> = {
+              [config.pollIdParamKey]: taskId
+            };
 
+            // Inherit Params
+            if (config.inheritParams) {
+              Object.assign(pollPayload, payload);
+            }
+
+            // Static Params from JSON
+            if (config.staticParamsJson) {
               try {
-                  const pollPayload: Record<string, any> = {
-                      [config.pollIdParamKey]: taskId
-                  };
-                  
-                  // Inherit Params
-                  if (config.inheritParams) {
-                      Object.assign(pollPayload, payload);
-                  }
-
-                  // Static Params from JSON
-                  if (config.staticParamsJson) {
-                      try {
-                          const staticParams = JSON.parse(config.staticParamsJson);
-                          Object.assign(pollPayload, staticParams);
-                      } catch (e) {
-                          console.error("Failed to parse staticParamsJson", e);
-                      }
-                  }
-
-                  const pollStart = Date.now();
-                  const pollRes = await makeRequest(
-                      selectedService,
-                      config.pollAction,
-                      config.pollVersion,
-                      config.pollMethod,
-                      pollPayload,
-                      controller.signal // Pass signal explicitly
-                  );
-
-                  const pollData = await pollRes.json();
-                  const pollDuration = Date.now() - pollStart;
-                  const status = getValueByPath(pollData, config.pollStatusPath);
-
-                  setResponseData({
-                      status: pollRes.status,
-                      statusText: pollRes.statusText,
-                      headers: {},
-                      body: pollData,
-                      timestamp: pollDuration,
-                      isPolling: true
-                  });
-
-                  if (status === config.pollSuccessValue) {
-                      setLoading(false);
-                      setResponseData(prev => prev ? { ...prev, isPolling: false } : null);
-                  } else if (config.pollFailedValue && status === config.pollFailedValue) {
-                      let errorMsg = `Async Task Failed: Status '${status}'`;
-                      if (config.pollErrorPath) {
-                          const extractedErr = getValueByPath(pollData, config.pollErrorPath);
-                          if (extractedErr) errorMsg += `: ${extractedErr}`;
-                      }
-                      setError(errorMsg);
-                      setLoading(false);
-                      setResponseData(prev => prev ? { ...prev, isPolling: false } : null);
-                  } else {
-                      pollLoop();
-                  }
-
-              } catch (err: any) {
-                  if (err.name === 'AbortError') return;
-                  console.error("Polling Error", err);
-                  setError(`Polling Error: ${err.message}`);
-                  setLoading(false);
-                  setResponseData(prev => prev ? { ...prev, isPolling: false } : null);
+                const staticParams = JSON.parse(config.staticParamsJson);
+                Object.assign(pollPayload, staticParams);
+              } catch (e) {
+                console.error("Failed to parse staticParamsJson", e);
               }
-          };
-          
-          pollLoop();
+            }
+
+            const pollStart = Date.now();
+            const pollRes = await makeRequest(
+              selectedService,
+              config.pollAction,
+              config.pollVersion,
+              config.pollMethod,
+              pollPayload,
+              controller.signal // Pass signal explicitly
+            );
+
+            const pollData = await pollRes.json();
+            const pollDuration = Date.now() - pollStart;
+            const status = getValueByPath(pollData, config.pollStatusPath);
+
+            setResponseData({
+              status: pollRes.status,
+              statusText: pollRes.statusText,
+              headers: {},
+              body: pollData,
+              timestamp: pollDuration,
+              isPolling: true
+            });
+
+            if (status === config.pollSuccessValue) {
+              setLoading(false);
+              setResponseData(prev => prev ? { ...prev, isPolling: false } : null);
+            } else if (config.pollFailedValue && status === config.pollFailedValue) {
+              let errorMsg = `Async Task Failed: Status '${status}'`;
+              if (config.pollErrorPath) {
+                const extractedErr = getValueByPath(pollData, config.pollErrorPath);
+                if (extractedErr) errorMsg += `: ${extractedErr}`;
+              }
+              setError(errorMsg);
+              setLoading(false);
+              setResponseData(prev => prev ? { ...prev, isPolling: false } : null);
+            } else {
+              pollLoop();
+            }
+
+          } catch (err: any) {
+            if (err.name === 'AbortError') return;
+            console.error("Polling Error", err);
+            setError(`Polling Error: ${err.message}`);
+            setLoading(false);
+            setResponseData(prev => prev ? { ...prev, isPolling: false } : null);
+          }
+        };
+
+        pollLoop();
       } else {
-          setLoading(false);
+        setLoading(false);
       }
 
     } catch (err: any) {
       if (err.name === 'AbortError') {
-          console.log('Request Aborted');
-          return;
+        console.log('Request Aborted');
+        return;
       }
       console.error(err);
       let msg = err.message;
       if (msg === 'Failed to fetch') {
-          msg = 'Network Error: Failed to fetch. This is likely a CORS issue. Please configure a Proxy in Settings (Gear Icon -> Network) or ensure the endpoint supports CORS.';
+        msg = 'Network Error: Failed to fetch. This is likely a CORS issue. Please configure a Proxy in Settings (Gear Icon -> Network) or ensure the endpoint supports CORS.';
       }
       setError(msg);
       setLoading(false);
@@ -750,71 +754,71 @@ const AppContent: React.FC = () => {
   return (
     <div className="flex h-screen w-full bg-white text-slate-900 overflow-hidden">
       {/* Sidebar Area */}
-      <div 
-        style={{ width: sidebarWidth }} 
+      <div
+        style={{ width: sidebarWidth }}
         className="flex-shrink-0 relative h-full"
       >
         <Sidebar
-            groups={groups}
-            services={services}
-            selectedId={selectedServiceId}
-            onSelect={setSelectedServiceId}
-            onAddService={handleAddService}
-            onAddGroup={handleAddGroup}
-            onDeleteService={handleDeleteService}
-            onDeleteGroup={handleDeleteGroup}
-            onOpenGlobalSettings={() => {
-                setSettingsInitialTab('general');
-                setShowSettings(true);
-            }}
-            onOpenServiceSettings={(id) => setShowServiceSettings(id)}
-            onToggleGroup={handleToggleGroup}
-            onRenameGroup={handleRenameGroup}
-            onMoveService={handleMoveService}
-            onReorderService={handleReorderService}
-            onReorderGroup={handleReorderGroup}
+          groups={groups}
+          services={services}
+          selectedId={selectedServiceId}
+          onSelect={setSelectedServiceId}
+          onAddService={handleAddService}
+          onAddGroup={handleAddGroup}
+          onDeleteService={handleDeleteService}
+          onDeleteGroup={handleDeleteGroup}
+          onOpenGlobalSettings={() => {
+            setSettingsInitialTab('general');
+            setShowSettings(true);
+          }}
+          onOpenServiceSettings={(id) => setShowServiceSettings(id)}
+          onToggleGroup={handleToggleGroup}
+          onRenameGroup={handleRenameGroup}
+          onMoveService={handleMoveService}
+          onReorderService={handleReorderService}
+          onReorderGroup={handleReorderGroup}
         />
-        <div 
-            className="absolute right-[-3px] top-0 w-[6px] h-full cursor-col-resize hover:bg-indigo-500 transition-colors z-50 opacity-0 hover:opacity-100"
-            onMouseDown={(e) => { e.preventDefault(); setIsResizing('sidebar'); }}
+        <div
+          className="absolute right-[-3px] top-0 w-[6px] h-full cursor-col-resize hover:bg-indigo-500 transition-colors z-50 opacity-0 hover:opacity-100"
+          onMouseDown={(e) => { e.preventDefault(); setIsResizing('sidebar'); }}
         />
       </div>
-      
+
       {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden">
         {selectedService ? (
-            <>
-                <div 
-                    style={{ width: requestPanelWidth }} 
-                    className="border-r border-gray-200 h-full flex flex-col min-w-[300px] flex-shrink-0 relative"
-                >
-                    <RequestPanel
-                        service={selectedService}
-                        onUpdateService={handleUpdateService}
-                        onSend={handleSendRequest}
-                        onStop={handleStopRequest}
-                        loading={loading}
-                        corsProxy={proxyUrl}
-                    />
-                    <div 
-                        className="absolute right-[-3px] top-0 w-[6px] h-full cursor-col-resize hover:bg-indigo-500 transition-colors z-50 opacity-0 hover:opacity-100"
-                        onMouseDown={(e) => { e.preventDefault(); setIsResizing('request'); }}
-                    />
-                </div>
-
-                <div className="flex-1 h-full flex flex-col min-w-[300px]">
-                    <ResponsePanel
-                        response={responseData}
-                        error={error}
-                        loading={loading}
-                        corsProxy={proxyUrl}
-                    />
-                </div>
-            </>
-        ) : (
-            <div className="flex-1 flex items-center justify-center bg-gray-50 text-gray-400">
-                Select or create a service to start
+          <>
+            <div
+              style={{ width: requestPanelWidth }}
+              className="border-r border-gray-200 h-full flex flex-col min-w-[300px] flex-shrink-0 relative"
+            >
+              <RequestPanel
+                service={selectedService}
+                onUpdateService={handleUpdateService}
+                onSend={handleSendRequest}
+                onStop={handleStopRequest}
+                loading={loading}
+                corsProxy={proxyUrl}
+              />
+              <div
+                className="absolute right-[-3px] top-0 w-[6px] h-full cursor-col-resize hover:bg-indigo-500 transition-colors z-50 opacity-0 hover:opacity-100"
+                onMouseDown={(e) => { e.preventDefault(); setIsResizing('request'); }}
+              />
             </div>
+
+            <div className="flex-1 h-full flex flex-col min-w-[300px]">
+              <ResponsePanel
+                response={responseData}
+                error={error}
+                loading={loading}
+                corsProxy={proxyUrl}
+              />
+            </div>
+          </>
+        ) : (
+          <div className="flex-1 flex items-center justify-center bg-gray-50 text-gray-400">
+            Select or create a service to start
+          </div>
         )}
       </div>
 
@@ -839,13 +843,13 @@ const AppContent: React.FC = () => {
         onDelete={handleDeleteService}
       />
 
-      <ImportSummaryModal 
+      <ImportSummaryModal
         isOpen={!!importSummary}
         onClose={() => setImportSummary(null)}
         summary={importSummary}
       />
 
-      <ImportModeModal 
+      <ImportModeModal
         isOpen={!!importModeData}
         onClose={() => setImportModeData(null)}
         serviceCount={importModeData?.services?.length || 0}
@@ -861,7 +865,7 @@ const AppContent: React.FC = () => {
         onConfirm={handleConfirmImportSelection}
       />
 
-      <ConfirmDialog 
+      <ConfirmDialog
         isOpen={showUpdatePrompt}
         title="Configuration Update Found"
         message="There is the latest archive file, do you want to update?"
@@ -873,11 +877,11 @@ const AppContent: React.FC = () => {
 };
 
 const App: React.FC = () => {
-    return (
-        <LanguageProvider>
-            <AppContent />
-        </LanguageProvider>
-    );
+  return (
+    <LanguageProvider>
+      <AppContent />
+    </LanguageProvider>
+  );
 }
 
 export default App;
