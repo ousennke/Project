@@ -598,6 +598,7 @@ const AppContent: React.FC = () => {
          }
       });
 
+      const reqStart = Date.now();
       const res = await makeRequest(
           selectedService, 
           selectedService.action, 
@@ -608,7 +609,7 @@ const AppContent: React.FC = () => {
       );
 
       const data = await res.json();
-      const duration = Date.now() - startTime;
+      const duration = Date.now() - reqStart;
       
       setResponseData({
         status: res.status,
@@ -677,6 +678,7 @@ const AppContent: React.FC = () => {
                       }
                   }
 
+                  const pollStart = Date.now();
                   const pollRes = await makeRequest(
                       selectedService,
                       config.pollAction,
@@ -687,7 +689,7 @@ const AppContent: React.FC = () => {
                   );
 
                   const pollData = await pollRes.json();
-                  const pollDuration = Date.now() - startTime;
+                  const pollDuration = Date.now() - pollStart;
                   const status = getValueByPath(pollData, config.pollStatusPath);
 
                   setResponseData({
