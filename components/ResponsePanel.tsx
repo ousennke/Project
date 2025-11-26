@@ -1,17 +1,112 @@
-
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ResponseData } from '../types';
-import { Image as ImageIcon, FileJson, AlertCircle, Copy, Check, Video, WrapText, Loader2 } from 'lucide-react';
+import { Image as ImageIcon, FileJson, AlertCircle, Copy, Check, Video, WrapText, Loader2, Download, PlayCircle } from 'lucide-react';
 import { useLanguage } from '../i18n';
 
 interface ResponsePanelProps {
   response: ResponseData | null;
   error: string | null;
   loading?: boolean;
+  corsProxy?: string;
 }
 
-const ResponsePanel: React.FC<ResponsePanelProps> = ({ response, error, loading }) => {
+// Sub-component to handle smart video loading (Direct vs Proxy/Blob)
+const VideoRenderer: React.FC<{ url: string; corsProxy?: string }> = ({ url, corsProxy }) => {
+    const [src, setSrc] = useState(url);
+    const [status, setStatus] = useState<'idle' | 'loading' | 'error' | 'success'>('idle');
+    const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+    // If url changes, reset
+    useEffect(() => {
+        setSrc(url);
+        setStatus('idle');
+        setErrorMsg(null);
+    }, [url]);
+
+    const handleLoadViaBlob = async () => {
+        setStatus('loading');
+        setErrorMsg(null);
+        try {
+            // Logic: 
+            // 1. Try fetching directly (User might have VPN/Global Proxy)
+            // 2. If corsProxy is provided, prepend it (User configured in settings)
+            // Note: If user has Global Proxy app, direct fetch should work IF server allows CORS or Proxy handles it.
+            // If server blocks CORS, direct fetch fails in browser.
+            
+            let fetchUrl = url;
+            if (corsProxy) {
+                fetchUrl = `${corsProxy}${url}`;
+            }
+
+            const res = await fetch(fetchUrl);
+            if (!res.ok) throw new Error(`Failed to load video: ${res.statusText}`);
+            
+            const blob = await res.blob();
+            const objectUrl = URL.createObjectURL(blob);
+            setSrc(objectUrl);
+            setStatus('success');
+        } catch (err: any) {
+            console.error("Video Fetch Error:", err);
+            let msg = err.message;
+            if (msg === 'Failed to fetch') msg = "Network/CORS Error. Ensure Global Proxy is active or configure in-app Proxy.";
+            setErrorMsg(msg);
+            setStatus('error');
+        }
+    };
+
+    return (
+        <div className="w-full bg-black flex flex-col items-center justify-center min-h-[300px] relative rounded-lg overflow-hidden group">
+            <video 
+                controls 
+                playsInline
+                preload="metadata"
+                className="w-full h-auto max-h-[600px] outline-none"
+                key={src} // Re-render on src change
+                crossOrigin={undefined} // Do not set anonymous to allow opaque responses if possible, though blob works best
+                referrerPolicy="no-referrer" // Important for some cloud storage
+            >
+                <source src={src} />
+                Your browser does not support the video tag.
+            </video>
+
+            {/* Overlay Controls for Fallback */}
+            {status !== 'success' && (
+                <div className="absolute top-2 right-2 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button 
+                        onClick={handleLoadViaBlob}
+                        disabled={status === 'loading'}
+                        className="bg-black/60 hover:bg-black/80 text-white text-xs px-3 py-1.5 rounded-full backdrop-blur-md flex items-center gap-2 border border-white/20 shadow-lg transition-all"
+                        title="If video fails to play, click to download and play locally"
+                    >
+                        {status === 'loading' ? <Loader2 size={12} className="animate-spin" /> : <PlayCircle size={12} />}
+                        {status === 'loading' ? 'Loading...' : 'Force Play (Cache)'}
+                    </button>
+                    <a 
+                        href={url} 
+                        download 
+                        target="_blank" 
+                        rel="noreferrer"
+                        className="bg-black/60 hover:bg-black/80 text-white text-xs px-3 py-1.5 rounded-full backdrop-blur-md flex items-center gap-2 border border-white/20 shadow-lg transition-all"
+                    >
+                        <Download size={12} /> Download
+                    </a>
+                </div>
+            )}
+
+            {/* Error Message */}
+            {status === 'error' && (
+                 <div className="absolute bottom-4 left-4 right-4 bg-red-900/90 text-white text-xs p-3 rounded border border-red-500/50 shadow-xl backdrop-blur-sm animate-in fade-in slide-in-from-bottom-2">
+                     <div className="font-bold mb-1 flex items-center gap-2">
+                         <AlertCircle size={14} /> Playback Error
+                     </div>
+                     {errorMsg}
+                 </div>
+            )}
+        </div>
+    );
+};
+
+const ResponsePanel: React.FC<ResponsePanelProps> = ({ response, error, loading, corsProxy }) => {
   const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<'preview' | 'raw'>('preview');
   const [copied, setCopied] = useState(false);
@@ -195,23 +290,13 @@ const ResponsePanel: React.FC<ResponsePanelProps> = ({ response, error, loading 
                                         />
                                     </div>
                                 ) : (
-                                    <div className="w-full bg-black flex items-center justify-center min-h-[300px]">
-                                        <video 
-                                            controls 
-                                            playsInline
-                                            preload="metadata"
-                                            className="w-full h-auto max-h-[600px]"
-                                        >
-                                            <source src={item.url} type="video/mp4" />
-                                            <source src={item.url} />
-                                            Your browser does not support the video tag.
-                                        </video>
-                                    </div>
+                                    <VideoRenderer url={item.url} corsProxy={corsProxy} />
                                 )}
                                 
                                 <div className="p-3 bg-white border-t border-gray-200 text-xs text-gray-500 font-mono truncate flex justify-between items-center">
                                     <span className="truncate flex-1 mr-2 opacity-70" title={item.url}>{item.url.substring(0, 100)}...</span>
-                                    <a href={item.url} download={`generated-file-${idx}`} target="_blank" rel="noreferrer" className="text-indigo-600 hover:text-indigo-800 font-medium hover:underline flex-shrink-0">
+                                    <a href={item.url} download={`generated-file-${idx}`} target="_blank" rel="noreferrer" className="text-indigo-600 hover:text-indigo-800 font-medium hover:underline flex-shrink-0 flex items-center gap-1">
+                                        <Download size={12} />
                                         {t.common.download}
                                     </a>
                                 </div>

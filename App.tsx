@@ -805,6 +805,7 @@ const AppContent: React.FC = () => {
                         response={responseData}
                         error={error}
                         loading={loading}
+                        corsProxy={proxyUrl}
                     />
                 </div>
             </>
