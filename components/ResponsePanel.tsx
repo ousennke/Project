@@ -38,7 +38,7 @@ const VideoRenderer: React.FC<{ url: string; corsProxy?: string }> = ({ url, cor
                 fetchUrl = `${corsProxy}${url}`;
             }
 
-            const res = await fetch(fetchUrl);
+            const res = await fetch(fetchUrl, { referrerPolicy: 'no-referrer' });
             if (!res.ok) throw new Error(`Failed to load video: ${res.statusText}`);
             
             const blob = await res.blob();
@@ -63,7 +63,6 @@ const VideoRenderer: React.FC<{ url: string; corsProxy?: string }> = ({ url, cor
                 className="w-full h-auto max-h-[600px] outline-none"
                 key={src} // Re-render on src change
                 crossOrigin={undefined} // Do not set anonymous to allow opaque responses if possible, though blob works best
-                referrerPolicy="no-referrer" // Important for some cloud storage
             >
                 <source src={src} />
                 Your browser does not support the video tag.
