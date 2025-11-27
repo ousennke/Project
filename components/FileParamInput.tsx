@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Upload, Link as LinkIcon, X, Loader2, FileCode, Check, AlertCircle, Plus, FileText } from 'lucide-react';
 import { useLanguage } from '../i18n';
@@ -51,16 +52,21 @@ const FileParamInput: React.FC<FileParamInputProps> = ({
       
       if (Array.isArray(value)) {
           initialValues = value;
-      } else if (typeof value === 'string' && value.trim() !== '') {
-          try {
-              // Try parsing as JSON array
-              const parsed = JSON.parse(value);
-              if (Array.isArray(parsed)) initialValues = parsed;
-              else initialValues = [value];
-          } catch {
-              // Treat as single string
-              initialValues = [value];
-          }
+      } else if (typeof value === 'string') {
+           // Allow empty string to create one empty slot
+           if (value === '') {
+               initialValues = [''];
+           } else {
+               try {
+                   // Try parsing as JSON array
+                   const parsed = JSON.parse(value);
+                   if (Array.isArray(parsed)) initialValues = parsed;
+                   else initialValues = [value];
+               } catch {
+                   // Treat as single string
+                   initialValues = [value];
+               }
+           }
       }
 
       if (initialValues.length === 0) {
@@ -96,18 +102,19 @@ const FileParamInput: React.FC<FileParamInputProps> = ({
 
   // Sync changes to parent
   useEffect(() => {
-      // Filter out empty values AND items with errors
-      const validValues = items
-          .filter(i => i.value !== '' && !i.error) 
-          .map(i => i.value);
+      // Map all values, INCLUDING empty ones, to preserve slot structure
+      const allValues = items.map(i => i.value);
       
       let nextValue = '';
-      if (validValues.length === 0) {
-          nextValue = '';
-      } else if (validValues.length === 1) {
-          nextValue = validValues[0];
+      if (allValues.length === 0) {
+          nextValue = ''; // Should ideally not happen due to min 1 item logic, but safe fallback
+      } else if (allValues.length === 1 && !enableMulti) {
+           // If multi is disabled, just send string
+          nextValue = allValues[0];
       } else {
-          nextValue = JSON.stringify(validValues);
+          // If multi is enabled, ALWAYS send array, even if it has 1 item or empty items
+          // This ensures the "slots" are persisted in the JSON
+          nextValue = JSON.stringify(allValues);
       }
 
       // Prevent infinite loops: only call onChange if the value actually changed
@@ -115,7 +122,7 @@ const FileParamInput: React.FC<FileParamInputProps> = ({
           prevOutputRef.current = nextValue;
           onChange(nextValue);
       }
-  }, [items, onChange]);
+  }, [items, onChange, enableMulti]);
 
   const handleAddItem = () => {
       setItems(prev => [

@@ -1,10 +1,11 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Credentials } from '../types';
-import { X, Shield, AlertTriangle, Download, Upload, Database, KeyRound, Globe, FileText, Settings as SettingsIcon } from 'lucide-react';
+import { X, Shield, AlertTriangle, Download, Upload, Database, KeyRound, Globe, FileText, Settings as SettingsIcon, BookOpen, ExternalLink } from 'lucide-react';
 import { useLanguage } from '../i18n';
 
-export type SettingsTab = 'general' | 'credentials' | 'storage' | 'network';
+export type SettingsTab = 'general' | 'credentials' | 'storage' | 'network' | 'manual';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -122,6 +123,18 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
              >
                 <Database size={16} />
                 {t.settings.dataStorage}
+             </button>
+
+             <button 
+                onClick={() => setActiveTab('manual')}
+                className={`w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-all ${
+                    activeTab === 'manual' 
+                    ? 'bg-white text-indigo-600 shadow-sm border border-gray-200' 
+                    : 'text-gray-600 hover:bg-gray-100 hover:text-indigo-600'
+                }`}
+             >
+                <BookOpen size={16} />
+                {t.settings.userManual}
              </button>
 
              <div className="mt-auto pt-6 px-2">
@@ -306,7 +319,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                             <div className="border border-gray-200 rounded-lg p-4 hover:border-indigo-300 transition-colors bg-white">
                                 <div className="flex items-start gap-3 mb-4">
                                     <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
-                                        <Download size={20} />
+                                        <Upload size={20} />
                                     </div>
                                     <div>
                                         <h4 className="font-medium text-gray-900 text-sm">{t.settings.exportConfig}</h4>
@@ -343,7 +356,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                             <div className="border border-gray-200 rounded-lg p-4 hover:border-emerald-300 transition-colors bg-white">
                                 <div className="flex items-start gap-3 mb-4">
                                     <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg">
-                                        <Upload size={20} />
+                                        <Download size={20} />
                                     </div>
                                     <div>
                                         <h4 className="font-medium text-gray-900 text-sm">{t.settings.importConfig}</h4>
@@ -367,6 +380,38 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                     onChange={handleFileChange}
                                 />
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+            
+            {/* User Manual Tab */}
+            {activeTab === 'manual' && (
+                <div className="space-y-6">
+                    <div>
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">{t.settings.userManual}</h3>
+                        
+                        <div className="flex flex-col items-center justify-center h-64 border border-gray-200 rounded-xl bg-slate-50 p-6 text-center space-y-4">
+                            <div className="w-16 h-16 bg-white text-indigo-600 rounded-full flex items-center justify-center shadow-sm border border-gray-100">
+                                <BookOpen size={32} />
+                            </div>
+                            
+                            <div>
+                                <h4 className="font-bold text-gray-900 mb-1">{t.settings.userManual}</h4>
+                                <p className="text-sm text-gray-500 max-w-xs mx-auto">
+                                    {t.settings.manualHint}
+                                </p>
+                            </div>
+
+                            <a 
+                                href="https://bytedance.larkoffice.com/wiki/Vh2EwnkqOiFJF7kb4iJcR3ktn4c" 
+                                target="_blank" 
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-all hover:shadow hover:-translate-y-0.5"
+                            >
+                                {t.settings.openManual}
+                                <ExternalLink size={16} />
+                            </a>
                         </div>
                     </div>
                 </div>

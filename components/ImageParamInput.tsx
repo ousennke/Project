@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Upload, Link as LinkIcon, X, Loader2, FileCode, Check, AlertCircle, Plus } from 'lucide-react';
 import { useLanguage } from '../i18n';
@@ -52,15 +53,19 @@ const ImageParamInput: React.FC<ImageParamInputProps> = ({
       
       if (Array.isArray(value)) {
           initialValues = value;
-      } else if (typeof value === 'string' && value.trim() !== '') {
-          try {
-              // Try parsing as JSON array
-              const parsed = JSON.parse(value);
-              if (Array.isArray(parsed)) initialValues = parsed;
-              else initialValues = [value];
-          } catch {
-              // Treat as single string
-              initialValues = [value];
+      } else if (typeof value === 'string') {
+          if (value === '') {
+              initialValues = [''];
+          } else {
+              try {
+                  // Try parsing as JSON array
+                  const parsed = JSON.parse(value);
+                  if (Array.isArray(parsed)) initialValues = parsed;
+                  else initialValues = [value];
+              } catch {
+                  // Treat as single string
+                  initialValues = [value];
+              }
           }
       }
 
@@ -96,18 +101,16 @@ const ImageParamInput: React.FC<ImageParamInputProps> = ({
 
   // Sync changes to parent
   useEffect(() => {
-      // Filter out empty values AND items with errors
-      const validValues = items
-          .filter(i => i.value !== '' && !i.error) 
-          .map(i => i.value);
+      // Map all values, INCLUDING empty ones
+      const allValues = items.map(i => i.value);
       
       let nextValue = '';
-      if (validValues.length === 0) {
+      if (allValues.length === 0) {
           nextValue = '';
-      } else if (validValues.length === 1) {
-          nextValue = validValues[0];
+      } else if (allValues.length === 1 && !enableMulti) {
+          nextValue = allValues[0];
       } else {
-          nextValue = JSON.stringify(validValues);
+          nextValue = JSON.stringify(allValues);
       }
 
       // Prevent infinite loops: only call onChange if the value actually changed
@@ -115,7 +118,7 @@ const ImageParamInput: React.FC<ImageParamInputProps> = ({
           prevOutputRef.current = nextValue;
           onChange(nextValue);
       }
-  }, [items, onChange]);
+  }, [items, onChange, enableMulti]);
 
   const handleAddItem = () => {
       setItems(prev => [

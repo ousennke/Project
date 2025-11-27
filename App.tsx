@@ -292,6 +292,20 @@ const AppContent: React.FC = () => {
     setSelectedServiceId(newService.id);
   };
 
+  const handleDuplicateService = (service: ApiService) => {
+      const newService: ApiService = {
+          ...service,
+          id: `s_${Date.now()}`,
+          name: `Copy of ${service.name}`,
+          params: service.params.map(p => ({
+              ...p,
+              id: `p_${Date.now()}_${Math.random()}`
+          }))
+      };
+      setServices([...services, newService]);
+      setSelectedServiceId(newService.id);
+  };
+
   const handleDeleteService = (id: string) => {
     const newServices = services.filter(s => s.id !== id);
     setServices(newServices);
@@ -558,8 +572,14 @@ const AppContent: React.FC = () => {
     // Check for empty file/string conversions - ONLY enabled params
     const pendingFiles = selectedService.params.filter(p => p.enabled !== false && p.type === 'file' && (!p.value || String(p.value).trim() === ''));
     if (pendingFiles.length > 0) {
-        alert(`Parameter "${pendingFiles[0].key}" has a file selected but not converted or empty. Please click "To URL" or "To Base64" before running the request.`);
-        return;
+        // Only block if single value mode is empty or if multi-mode has all empty slots
+        // But since we allow empty slots now, we should only block if user hasn't configured ANYTHING useful maybe?
+        // Actually, with the new persistence logic, p.value might be '[""]'.
+        // Let's refine validation: warn if the user intends to send a file but hasn't uploaded/converted it.
+        // However, empty array might be valid.
+        // Let's relax this validation or make it smarter.
+        // If value is empty string OR '[]' OR '[""]' (empty slot array), maybe warn?
+        // For now, let's skip blocking to allow flexibility as requested.
     }
     // --- VALIDATION END ---
 
@@ -862,6 +882,7 @@ const AppContent: React.FC = () => {
         groups={groups}
         onSave={handleUpdateService}
         onDelete={handleDeleteService}
+        onDuplicate={handleDuplicateService}
       />
 
       <ImportSummaryModal 

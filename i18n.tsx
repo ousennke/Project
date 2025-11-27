@@ -1,4 +1,5 @@
 
+
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
 type Language = 'en' | 'zh';
@@ -75,9 +76,12 @@ const translations = {
       globalConfig: "Global Config",
       credentials: "Credentials",
       networkImages: "Network & Files",
-      dataStorage: "Data & Storage",
+      dataStorage: "Save & Load",
       language: "Language / 语言",
       contactInfo: "VolcEngine Intelligent VisionAi Api-DemoGround",
+      userManual: "User Manual",
+      manualHint: "View the detailed usage guide in Lark Docs.",
+      openManual: "Open User Manual",
       
       // Credentials
       volcCredentials: "VolcEngine Credentials",
@@ -97,7 +101,7 @@ const translations = {
       // Storage
       exportConfig: "Export Configuration",
       exportHint: "Download current setup as JSON.",
-      includeCreds: "Include Access Key & Secret Key",
+      includeCreds: "Include Access Key & Secret Key（Please be careful to protect your A/S key）",
       includeCredsWarning: "Warning: The exported file will contain sensitive secrets.",
       downloadJson: "Download JSON",
       importConfig: "Import Configuration",
@@ -290,9 +294,12 @@ const translations = {
       globalConfig: "全局配置",
       credentials: "凭证 (Credentials)",
       networkImages: "网络与文件",
-      dataStorage: "数据与存储",
+      dataStorage: "保存与读取",
       language: "Language / 语言",
       contactInfo: "火山引擎 - 智能视觉 - API 体验 Demo",
+      userManual: "使用手册",
+      manualHint: "在飞书文档中查看使用指南。",
+      openManual: "打开使用手册",
       
       // Credentials
       volcCredentials: "VolcEngine 凭证",
@@ -312,7 +319,7 @@ const translations = {
       // Storage
       exportConfig: "导出配置",
       exportHint: "将当前设置下载为 JSON。",
-      includeCreds: "包含 Access Key & Secret Key",
+      includeCreds: "包含 Access Key & Secret Key （请注意保护个人密钥，防止泄露）",
       includeCredsWarning: "警告：导出的文件将包含敏感密钥。",
       downloadJson: "下载 JSON",
       importConfig: "导入配置",

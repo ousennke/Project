@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { ApiService, ServiceGroup, AsyncConfig } from '../types';
-import { X, Save, Globe, Link as LinkIcon, Layers, Tag, Trash2, AlertTriangle, Repeat, Clock, Code2 } from 'lucide-react';
+import { X, Save, Globe, Link as LinkIcon, Layers, Tag, Trash2, AlertTriangle, Repeat, Clock, Code2, Copy } from 'lucide-react';
 import { useLanguage } from '../i18n';
 
 interface ServiceSettingsModalProps {
@@ -11,6 +11,7 @@ interface ServiceSettingsModalProps {
   groups: ServiceGroup[];
   onSave: (service: ApiService) => void;
   onDelete: (id: string) => void;
+  onDuplicate?: (service: ApiService) => void;
 }
 
 type Tab = 'basic' | 'async';
@@ -22,6 +23,7 @@ const ServiceSettingsModal: React.FC<ServiceSettingsModalProps> = ({
   groups,
   onSave,
   onDelete,
+  onDuplicate
 }) => {
   const { t } = useLanguage();
   const [formData, setFormData] = useState<ApiService | null>(null);
@@ -415,27 +417,35 @@ const ServiceSettingsModal: React.FC<ServiceSettingsModalProps> = ({
 
         <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between flex-shrink-0">
           
-          <button
-            type="button"
-            onClick={handleDeleteClick}
-            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all ${
-                isDeleting 
-                ? 'bg-red-600 text-white hover:bg-red-700 shadow-sm' 
-                : 'text-red-600 bg-red-50 hover:bg-red-100'
-            }`}
-          >
-            {isDeleting ? (
-                <>
-                    <AlertTriangle size={16} />
-                    {t.serviceSettings.confirmDelete}
-                </>
-            ) : (
-                <>
-                    <Trash2 size={16} />
-                    {t.serviceSettings.deleteService}
-                </>
+          <div className="flex gap-2">
+            <button
+                type="button"
+                onClick={handleDeleteClick}
+                className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-all ${
+                    isDeleting 
+                    ? 'bg-red-600 text-white hover:bg-red-700 shadow-sm' 
+                    : 'text-red-600 bg-red-50 hover:bg-red-100'
+                }`}
+                title={t.serviceSettings.deleteService}
+            >
+                {isDeleting ? <AlertTriangle size={16} /> : <Trash2 size={16} />}
+                <span className={isDeleting ? 'inline' : 'hidden sm:inline'}>{isDeleting ? t.serviceSettings.confirmDelete : t.serviceSettings.deleteService}</span>
+            </button>
+            {onDuplicate && (
+                <button
+                    type="button"
+                    onClick={() => {
+                        onDuplicate(formData);
+                        onClose();
+                    }}
+                    className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 hover:text-indigo-600 rounded-lg transition-colors"
+                    title="Duplicate Service"
+                >
+                    <Copy size={16} />
+                    <span className="hidden sm:inline">Copy</span>
+                </button>
             )}
-          </button>
+          </div>
 
           <div className="flex gap-3">
             <button
