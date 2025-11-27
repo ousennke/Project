@@ -1,9 +1,9 @@
-
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { HistoryItem } from '../types';
 import { Clock, Info, AlertCircle, Image as ImageIcon, Video, FileText, Trash2, Download, X, Copy, Check, Loader2, Archive, Maximize2, Play } from 'lucide-react';
 import { useLanguage } from '../i18n';
 import JSZip from 'jszip';
+import ConfirmDialog from './ConfirmDialog';
 
 interface HistoryPanelProps {
     historyItems: HistoryItem[];
@@ -65,9 +65,53 @@ const getExtension = (mimeType: string | null, mediaType: 'image' | 'video', url
     return mediaType === 'video' ? 'mp4' : 'png';
 };
 
-// Simple Video Thumbnail Component that plays on hover
-const VideoThumbnail: React.FC<{ url: string }> = ({ url }) => {
+// Smart Video Thumbnail Component that fetches blob to bypass referrer checks
+const VideoThumbnail: React.FC<{ url: string; corsProxy?: string }> = ({ url, corsProxy }) => {
     const videoRef = useRef<HTMLVideoElement>(null);
+    const [videoSrc, setVideoSrc] = useState<string | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        let isMounted = true;
+        let objectUrl: string | null = null;
+
+        const fetchVideo = async () => {
+            try {
+                setLoading(true);
+                const fetchUrl = corsProxy ? `${corsProxy}${url}` : url;
+                // Use no-referrer to bypass hotlink protection (403 Forbidden)
+                // Use credentials: 'omit' to prevent sending cookies/auth headers which might trigger stricter checks
+                const res = await fetch(fetchUrl, { 
+                    referrerPolicy: 'no-referrer',
+                    credentials: 'omit'
+                });
+                
+                if (!res.ok) throw new Error('Fetch failed');
+                
+                const blob = await res.blob();
+                objectUrl = URL.createObjectURL(blob);
+                
+                if (isMounted) {
+                    setVideoSrc(objectUrl);
+                    setLoading(false);
+                }
+            } catch (e) {
+                // Fallback to direct URL if blob fetch fails (e.g. CORS)
+                // This might still 403 if referrer is checked, but it's the best fallback
+                if (isMounted) {
+                    setVideoSrc(url); 
+                    setLoading(false);
+                }
+            }
+        };
+
+        fetchVideo();
+
+        return () => {
+            isMounted = false;
+            if (objectUrl) URL.revokeObjectURL(objectUrl);
+        };
+    }, [url, corsProxy]);
 
     return (
         <div 
@@ -80,19 +124,30 @@ const VideoThumbnail: React.FC<{ url: string }> = ({ url }) => {
                 }
             }}
         >
-            <video 
-                ref={videoRef}
-                src={url}
-                className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity"
-                muted
-                loop
-                playsInline
-                preload="metadata"
-            />
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none group-hover:opacity-0 transition-opacity">
-                <div className="w-6 h-6 rounded-full bg-black/50 flex items-center justify-center backdrop-blur-sm text-white">
-                    <Play size={10} fill="currentColor" />
+            {loading && (
+                <div className="absolute inset-0 flex items-center justify-center z-10">
+                    <Loader2 size={16} className="text-white/50 animate-spin" />
                 </div>
+            )}
+
+            {videoSrc && (
+                <video 
+                    ref={videoRef}
+                    src={videoSrc}
+                    className={`w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity ${loading ? 'invisible' : 'visible'}`}
+                    muted
+                    loop
+                    playsInline
+                    preload="metadata"
+                />
+            )}
+
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none group-hover:opacity-0 transition-opacity">
+                {!loading && (
+                    <div className="w-6 h-6 rounded-full bg-black/50 flex items-center justify-center backdrop-blur-sm text-white">
+                        <Play size={10} fill="currentColor" />
+                    </div>
+                )}
             </div>
             <div className="absolute top-1 right-1 text-white opacity-70">
                 <Video size={10} />
@@ -107,6 +162,7 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ historyItems, onClear, cors
     const [previewMedia, setPreviewMedia] = useState<{ type: 'image' | 'video', url: string } | null>(null);
     const [isZipping, setIsZipping] = useState(false);
     const [copied, setCopied] = useState(false);
+    const [showConfirmClear, setShowConfirmClear] = useState(false);
 
     const handleCopyJson = () => {
         if (!selectedItem) return;
@@ -150,10 +206,8 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ historyItems, onClear, cors
                     request: item.requestPayload,
                     response: item.responseBody
                 };
-                // Ensure unique filenames if multiple requests happen at same second
+                
                 const jsonName = `${baseFilename}.json`;
-                // If collision, JSZip overwrites, which is acceptable for identical timestamps/services usually, 
-                // but we could append index if needed. For now, keep it simple as requested.
                 root.file(jsonName, JSON.stringify(meta, null, 2));
 
                 // 2. Download Media
@@ -162,7 +216,6 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ historyItems, onClear, cors
                         const media = item.mediaItems[j];
                         
                         // Suffix for multiple files: _1, _2
-                        // Only add suffix if there is more than 1 media item to keep it clean
                         const suffix = item.mediaItems.length > 1 ? `_${j + 1}` : '';
                         const fileStem = `${baseFilename}${suffix}`;
 
@@ -181,7 +234,13 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ historyItems, onClear, cors
 
                             // Handle URL download
                             const fetchUrl = corsProxy ? `${corsProxy}${media.url}` : media.url;
-                            const res = await fetch(fetchUrl);
+                            
+                            // Add no-referrer and omit credentials to avoid 403 on protected assets
+                            const res = await fetch(fetchUrl, { 
+                                referrerPolicy: 'no-referrer',
+                                credentials: 'omit'
+                            });
+                            
                             if (res.ok) {
                                 const blob = await res.blob();
                                 const ext = getExtension(blob.type, media.type, media.url);
@@ -234,7 +293,7 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ historyItems, onClear, cors
                         {isZipping ? <Loader2 size={16} className="animate-spin" /> : <Archive size={16} />}
                     </button>
                     <button 
-                        onClick={onClear}
+                        onClick={() => setShowConfirmClear(true)}
                         disabled={historyItems.length === 0}
                         className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors disabled:opacity-30"
                         title={t.history.clear}
@@ -292,9 +351,9 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ historyItems, onClear, cors
                                                         onClick={() => setPreviewMedia(media)}
                                                     >
                                                         {media.type === 'image' ? (
-                                                            <img src={media.url} className="w-full h-full object-cover" loading="lazy" />
+                                                            <img src={media.url} className="w-full h-full object-cover" loading="lazy" referrerPolicy="no-referrer" />
                                                         ) : (
-                                                            <VideoThumbnail url={media.url} />
+                                                            <VideoThumbnail url={media.url} corsProxy={corsProxy} />
                                                         )}
                                                         {/* Source Key Hint */}
                                                         <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-[8px] text-white p-0.5 truncate opacity-0 group-hover/media:opacity-100 transition-opacity">
@@ -385,6 +444,7 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ historyItems, onClear, cors
                                 src={previewMedia.url} 
                                 className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl" 
                                 alt="Full Preview" 
+                                referrerPolicy="no-referrer"
                             />
                         ) : (
                             <video 
@@ -419,6 +479,17 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ historyItems, onClear, cors
                     </div>
                 </div>
             )}
+            
+            <ConfirmDialog 
+                isOpen={showConfirmClear}
+                title={t.history.clear}
+                message={t.sidebar.confirmDelete}
+                onConfirm={() => {
+                    onClear();
+                    setShowConfirmClear(false);
+                }}
+                onCancel={() => setShowConfirmClear(false)}
+            />
         </div>
     );
 };
