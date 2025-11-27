@@ -70,6 +70,14 @@ export interface Credentials {
   secretAccessKey: string;
 }
 
+export interface PollHistoryItem {
+    timestamp: number;
+    url: string;
+    status: number;
+    statusText: string;
+    body?: any;
+}
+
 export interface ResponseData {
   status: number;
   statusText: string;
@@ -77,6 +85,27 @@ export interface ResponseData {
   body: any;
   timestamp: number;
   isPolling?: boolean; // UI state for async
+  pollHistory?: PollHistoryItem[];
+}
+
+export interface MediaItem {
+    type: 'image' | 'video';
+    url: string;
+    sourceKey: string;
+}
+
+export interface HistoryItem {
+    id: string;
+    timestamp: number;
+    serviceName: string;
+    action: string;
+    status: 'success' | 'error';
+    statusCode: number;
+    duration: number;
+    responseBody: any;
+    requestPayload?: any; // Optional: store what was sent
+    mediaItems: MediaItem[];
+    errorMsg?: string;
 }
 
 export enum ContentType {

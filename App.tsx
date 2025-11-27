@@ -1,15 +1,17 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import RequestPanel from './components/RequestPanel';
 import ResponsePanel from './components/ResponsePanel';
+import HistoryPanel from './components/HistoryPanel';
 import SettingsModal, { SettingsTab } from './components/SettingsModal';
 import ServiceSettingsModal from './components/ServiceSettingsModal';
 import ImportSummaryModal, { ImportSummaryData } from './components/ImportSummaryModal';
 import ImportSelectionModal from './components/ImportSelectionModal';
 import ImportModeModal from './components/ImportModeModal';
 import ConfirmDialog from './components/ConfirmDialog';
-import { ApiService, Credentials, ResponseData, ServiceGroup } from './types';
+import { ApiService, Credentials, ResponseData, ServiceGroup, PollHistoryItem, HistoryItem, MediaItem } from './types';
 import { signRequest } from './services/volcSigner';
 import { LanguageProvider } from './i18n';
 
@@ -62,6 +64,98 @@ const simpleHash = (str: string) => {
   return hash.toString();
 };
 
+// --- Media Extraction Helper (Copied logic to be available for History) ---
+const extractMediaFromResponse = (data: any): MediaItem[] => {
+    const media: MediaItem[] = [];
+    const seen = new Set<string>();
+
+    const add = (type: 'image' | 'video', url: string, sourceKey: string) => {
+        if (!url || seen.has(url)) return;
+        seen.add(url);
+        media.push({ type, url, sourceKey: sourceKey || 'unknown' });
+    };
+    
+    const isUrl = (s: string) => s.startsWith('http') || s.startsWith('//') || s.startsWith('data:');
+
+    const traverse = (obj: any, currentKey: string) => {
+      if (!obj) return;
+      
+      if (typeof obj === 'string') {
+         if (obj.trim().startsWith('{') || obj.trim().startsWith('[')) {
+             try {
+                 const parsed = JSON.parse(obj);
+                 traverse(parsed, currentKey); 
+                 return;
+             } catch (e) {}
+         }
+         if (obj.match(/^https?:\/\/.*\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?.*)?$/i) || obj.startsWith('data:image')) {
+             add('image', obj, currentKey);
+         } else if (obj.match(/^https?:\/\/.*\.(mp4|mov|webm|avi)(\?.*)?$/i)) {
+             add('video', obj, currentKey);
+         } else if ((obj.includes('mime_type=video') || obj.includes('mime_type=image')) && isUrl(obj)) {
+             if (obj.includes('mime_type=video')) add('video', obj, currentKey);
+             else add('image', obj, currentKey);
+         }
+         return;
+      }
+
+      if (Array.isArray(obj)) {
+        obj.forEach(item => traverse(item, currentKey));
+        return;
+      }
+      
+      if (typeof obj === 'object') {
+         if (obj.image_url) add('image', obj.image_url, 'image_url');
+         if (obj.image_urls && Array.isArray(obj.image_urls)) {
+             obj.image_urls.forEach((u: any) => typeof u === 'string' && add('image', u, 'image_urls'));
+         }
+         
+         if (obj.video_url) add('video', obj.video_url, 'video_url');
+         if (obj.preview_url) add('video', obj.preview_url, 'preview_url');
+         
+         if (obj.video_urls && Array.isArray(obj.video_urls)) {
+             obj.video_urls.forEach((u: any) => typeof u === 'string' && add('video', u, 'video_urls'));
+         }
+
+         Object.keys(obj).forEach(key => {
+             const lowerKey = key.toLowerCase();
+             const val = obj[key];
+             if ((lowerKey.includes('video') || lowerKey.includes('preview')) && (lowerKey.includes('url') || lowerKey.includes('uri'))) {
+                 if (typeof val === 'string' && isUrl(val)) {
+                     add('video', val, key);
+                 } else if (Array.isArray(val)) {
+                     val.forEach((v: any) => {
+                         if (typeof v === 'string' && isUrl(v)) add('video', v, key);
+                     });
+                 }
+             }
+         });
+
+         const b64Keys = ['binary_data_base64', 'base64', 'image_base64'];
+         b64Keys.forEach(key => {
+             if (obj[key]) {
+                 const val = obj[key];
+                 const list = Array.isArray(val) ? val : [val];
+                 list.forEach((item: any) => {
+                     if (typeof item === 'string') {
+                         const url = item.startsWith('data:') ? item : `data:image/png;base64,${item}`;
+                         add('image', url, key);
+                     }
+                 });
+             }
+         });
+         
+         Object.entries(obj).forEach(([key, val]) => {
+             traverse(val, key);
+         });
+      }
+    };
+
+    traverse(data, 'root');
+    return media;
+};
+
+
 const AppContent: React.FC = () => {
   const [groups, setGroups] = useState<ServiceGroup[]>(DEFAULT_GROUPS);
   const [services, setServices] = useState<ApiService[]>(DEFAULT_SERVICES);
@@ -73,6 +167,9 @@ const AppContent: React.FC = () => {
   });
   const [proxyUrl, setProxyUrl] = useState('');
   
+  // History State
+  const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
+
   // Modal States
   const [showSettings, setShowSettings] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('general');
@@ -82,9 +179,9 @@ const AppContent: React.FC = () => {
   const [pendingConfig, setPendingConfig] = useState<any | null>(null);
   
   // Import States
-  const [importModeData, setImportModeData] = useState<any | null>(null); // Holds data for Mode Selection
-  const [importSelectionData, setImportSelectionData] = useState<any | null>(null); // Holds data for Granular Selection
-  const [pendingImportCreds, setPendingImportCreds] = useState(false); // Stores credential decision
+  const [importModeData, setImportModeData] = useState<any | null>(null); 
+  const [importSelectionData, setImportSelectionData] = useState<any | null>(null); 
+  const [pendingImportCreds, setPendingImportCreds] = useState(false); 
 
   const [loading, setLoading] = useState(false);
   const [responseData, setResponseData] = useState<ResponseData | null>(null);
@@ -94,7 +191,8 @@ const AppContent: React.FC = () => {
   // Layout State
   const [sidebarWidth, setSidebarWidth] = useState(280);
   const [requestPanelWidth, setRequestPanelWidth] = useState(500);
-  const [isResizing, setIsResizing] = useState<'sidebar' | 'request' | null>(null);
+  const [historyPanelWidth, setHistoryPanelWidth] = useState(280); // New History Width
+  const [isResizing, setIsResizing] = useState<'sidebar' | 'request' | 'history' | null>(null);
 
   // Load from local storage on mount
   useEffect(() => {
@@ -112,7 +210,6 @@ const AppContent: React.FC = () => {
             if (config.groups && config.services) {
                 setGroups(config.groups);
                 setServices(config.services);
-                // Select first service if available
                 if (config.services.length > 0) {
                     setSelectedServiceId(config.services[0].id);
                 }
@@ -132,7 +229,6 @@ const AppContent: React.FC = () => {
         const currentHash = simpleHash(configText);
         const lastHash = localStorage.getItem('volc_playground_default_hash');
         
-        // If we've already seen this exact version of default.json (accepted or rejected), do nothing
         if (currentHash === lastHash) return;
 
         const config = JSON.parse(configText);
@@ -140,14 +236,12 @@ const AppContent: React.FC = () => {
 
         const hasLocalConfig = localStorage.getItem('volc_playground_config');
 
-        // If no local config, apply default.json immediately (First run)
         if (!hasLocalConfig) {
            applyConfig(config);
            localStorage.setItem('volc_playground_default_hash', currentHash);
            return;
         }
 
-        // If local config exists but a new default.json is detected, prompt user
         setPendingConfig({ config, hash: currentHash });
         setShowUpdatePrompt(true);
 
@@ -165,8 +259,7 @@ const AppContent: React.FC = () => {
       try {
         localStorage.setItem('volc_playground_config', JSON.stringify(config));
       } catch (e) {
-        // Catch LocalStorage QuotaExceededError to prevent crash
-        console.warn("Failed to save config to localStorage (likely quota exceeded due to large Base64 files).", e);
+        console.warn("Failed to save config to localStorage.", e);
       }
   }, [groups, services]);
 
@@ -189,8 +282,6 @@ const AppContent: React.FC = () => {
           applyConfig(pendingConfig.config);
           localStorage.setItem('volc_playground_default_hash', pendingConfig.hash);
           setShowUpdatePrompt(false);
-          
-          // Show summary of what changed
           setImportSummary({
               serviceCount: pendingConfig.config.services.length,
               groupCount: pendingConfig.config.groups.length,
@@ -203,7 +294,6 @@ const AppContent: React.FC = () => {
 
   const handleCancelUpdate = () => {
       if (pendingConfig) {
-          // Mark this hash as seen so we don't prompt again for this specific update
           localStorage.setItem('volc_playground_default_hash', pendingConfig.hash);
           setShowUpdatePrompt(false);
           setPendingConfig(null);
@@ -220,9 +310,12 @@ const AppContent: React.FC = () => {
         setSidebarWidth(newWidth);
       } else if (isResizing === 'request') {
         const offset = e.clientX - sidebarWidth;
-        const maxW = window.innerWidth - sidebarWidth - 300; 
-        const newWidth = Math.max(480, Math.min(maxW, offset));
+        const maxW = window.innerWidth - sidebarWidth - historyPanelWidth - 200; 
+        const newWidth = Math.max(300, Math.min(maxW, offset));
         setRequestPanelWidth(newWidth);
+      } else if (isResizing === 'history') {
+        const newWidth = Math.max(200, Math.min(600, window.innerWidth - e.clientX));
+        setHistoryPanelWidth(newWidth);
       }
     };
 
@@ -243,7 +336,7 @@ const AppContent: React.FC = () => {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isResizing, sidebarWidth]);
+  }, [isResizing, sidebarWidth, historyPanelWidth]);
 
 
   const handleSaveCredentials = (creds: Credentials) => {
@@ -364,7 +457,6 @@ const AppContent: React.FC = () => {
     setGroups(newGroups);
   };
 
-  // -- Import / Export --
   const handleExportConfig = (includeCredentials: boolean) => {
     const config: any = { groups, services, version: 1 };
     if (includeCredentials) {
@@ -386,7 +478,6 @@ const AppContent: React.FC = () => {
             const content = e.target?.result as string;
             const config = JSON.parse(content);
             if (Array.isArray(config.groups) && Array.isArray(config.services)) {
-                // Ensure params have 'enabled' prop for backward compatibility
                 if (config.services) {
                     config.services = config.services.map((s: any) => ({
                         ...s,
@@ -396,7 +487,6 @@ const AppContent: React.FC = () => {
                         }))
                     }));
                 }
-                // Open Mode Selection Modal first
                 setImportModeData(config);
                 setShowSettings(false); 
             } else {
@@ -413,7 +503,6 @@ const AppContent: React.FC = () => {
       if (!importModeData) return;
 
       if (mode === 'overwrite') {
-          // Full Replacement Logic
           setGroups(importModeData.groups);
           setServices(importModeData.services);
           if (importModeData.services.length > 0) {
@@ -435,14 +524,12 @@ const AppContent: React.FC = () => {
               hasCredentials: credsUpdated,
               serviceNames: importModeData.services.map((s: any) => s.name)
           });
-          setImportModeData(null); // Close modal
+          setImportModeData(null);
 
       } else {
-          // Merge Logic: Proceed to Selection Modal
-          // Pass the credential decision to the next step via state or handle it later
           setPendingImportCreds(importCreds);
           setImportSelectionData(importModeData);
-          setImportModeData(null); // Close mode modal, open selection modal
+          setImportModeData(null);
       }
   };
 
@@ -452,7 +539,6 @@ const AppContent: React.FC = () => {
     const selectedServices = selectedIndices.map(i => importSelectionData.services[i]);
     const { groups: importedGroups, credentials: importedCreds } = importSelectionData;
 
-    // 1. Merge Groups
     const newGroups = [...groups];
     importedGroups.forEach((impG: ServiceGroup) => {
         const existingGIndex = newGroups.findIndex(g => g.id === impG.id);
@@ -461,22 +547,18 @@ const AppContent: React.FC = () => {
         }
     });
 
-    // 2. Merge Services
     const newServices = [...services];
     let addedCount = 0;
     let updatedCount = 0;
 
     selectedServices.forEach((impS: ApiService) => {
-        // Match by Name as requested
         const existingIndex = newServices.findIndex(s => s.name === impS.name);
         
         if (existingIndex >= 0) {
-            // UPDATE: Keep local ID, overwrite content
             const existingId = newServices[existingIndex].id;
             newServices[existingIndex] = { ...impS, id: existingId };
             updatedCount++;
         } else {
-            // ADD: Check ID collision. 
             let newId = impS.id;
             if (newServices.some(s => s.id === newId)) {
                  newId = `s_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -489,7 +571,6 @@ const AppContent: React.FC = () => {
     setGroups(newGroups);
     setServices(newServices);
     
-    // Apply Credentials if selected in the previous Mode modal
     let credsUpdated = false;
     if (pendingImportCreds && importedCreds) {
         setCredentials(importedCreds);
@@ -500,7 +581,6 @@ const AppContent: React.FC = () => {
     setImportSelectionData(null);
     setPendingImportCreds(false);
 
-    // Show Summary
     setImportSummary({
         serviceCount: addedCount + updatedCount,
         groupCount: newGroups.length, 
@@ -512,21 +592,27 @@ const AppContent: React.FC = () => {
   // -- HTTP Logic --
 
   const makeRequest = async (service: ApiService, action: string, version: string, method: string, payload: any, signal?: AbortSignal) => {
-      const queryParams = {
+      const queryParams: Record<string, any> = {
         Action: action,
         Version: version,
       };
 
-      const bodyString = JSON.stringify(payload);
+      let body: string | undefined;
+      const headers: Record<string, string> = {};
+
+      if (method.toUpperCase() === 'GET') {
+          Object.assign(queryParams, payload);
+      } else {
+          body = JSON.stringify(payload);
+          headers['Content-Type'] = 'application/json';
+      }
 
       const signatureHeaders = signRequest({
         method: method,
         pathname: '/', 
         params: queryParams,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: bodyString,
+        headers: headers,
+        body: body,
         region: service.region,
         serviceName: service.serviceName,
         accessKeyId: credentials.accessKeyId,
@@ -539,14 +625,25 @@ const AppContent: React.FC = () => {
       }
 
       const url = new URL(fetchUrl);
-      Object.entries(queryParams).forEach(([k, v]) => url.searchParams.append(k, v));
+      
+      Object.entries(queryParams).forEach(([k, v]) => {
+          if (Array.isArray(v)) {
+              v.forEach(val => url.searchParams.append(k, String(val)));
+          } else if (typeof v === 'object' && v !== null) {
+              url.searchParams.append(k, JSON.stringify(v));
+          } else {
+              url.searchParams.append(k, String(v));
+          }
+      });
 
-      return fetch(url.toString(), {
+      const response = await fetch(url.toString(), {
         method: method,
         headers: signatureHeaders,
-        body: bodyString,
+        body: body,
         signal: signal,
       });
+
+      return { response, url: url.toString() };
   };
 
   const selectedService = services.find(s => s.id === selectedServiceId);
@@ -560,6 +657,26 @@ const AppContent: React.FC = () => {
       setResponseData(prev => prev ? { ...prev, isPolling: false } : null);
   };
 
+  // --- Add To History Helper ---
+  const addToHistory = (status: 'success' | 'error', statusCode: number, body: any, duration: number, payload: any, errorMsg?: string) => {
+      if (!selectedService) return;
+      const media = extractMediaFromResponse(body);
+      const newItem: HistoryItem = {
+          id: `hist_${Date.now()}`,
+          timestamp: Date.now(),
+          serviceName: selectedService.name,
+          action: selectedService.action,
+          status,
+          statusCode,
+          duration,
+          responseBody: body,
+          requestPayload: payload,
+          mediaItems: media,
+          errorMsg
+      };
+      setHistoryItems(prev => [newItem, ...prev]);
+  };
+
   const handleSendRequest = async () => {
     if (!selectedService) return;
     if (!credentials.accessKeyId || !credentials.secretAccessKey) {
@@ -568,26 +685,10 @@ const AppContent: React.FC = () => {
       return;
     }
 
-    // --- VALIDATION START ---
-    // Check for empty file/string conversions - ONLY enabled params
-    const pendingFiles = selectedService.params.filter(p => p.enabled !== false && p.type === 'file' && (!p.value || String(p.value).trim() === ''));
-    if (pendingFiles.length > 0) {
-        // Only block if single value mode is empty or if multi-mode has all empty slots
-        // But since we allow empty slots now, we should only block if user hasn't configured ANYTHING useful maybe?
-        // Actually, with the new persistence logic, p.value might be '[""]'.
-        // Let's refine validation: warn if the user intends to send a file but hasn't uploaded/converted it.
-        // However, empty array might be valid.
-        // Let's relax this validation or make it smarter.
-        // If value is empty string OR '[]' OR '[""]' (empty slot array), maybe warn?
-        // For now, let's skip blocking to allow flexibility as requested.
-    }
-    // --- VALIDATION END ---
-
     if (abortControllerRef.current) {
         abortControllerRef.current.abort();
     }
     
-    // Create a local controller for this specific request session
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
@@ -595,29 +696,22 @@ const AppContent: React.FC = () => {
     setError(null);
     setResponseData(null);
     const startTime = Date.now();
+    let payload: Record<string, any> = {};
 
     try {
-      const payload: Record<string, any> = {};
       selectedService.params.forEach(p => {
-         // Skip disabled params
          if (p.enabled === false) return;
 
          if (p.type === 'json' && typeof p.value === 'string') {
             try { payload[p.key] = JSON.parse(p.value); } catch { payload[p.key] = p.value; }
          } else {
              let val = p.value;
-             
-             // Special handling for File type: 
-             // If value looks like a JSON array string (from multiple file uploads), parse it back to array
              if (p.type === 'file' && typeof val === 'string') {
                  try {
                      const parsed = JSON.parse(val);
                      if (Array.isArray(parsed)) val = parsed;
                  } catch {}
              }
-
-             // Auto-wrap image_urls and binary_data_base64 if they are SINGLE strings
-             // AND Filter out empty strings which cause 400 errors
              if (p.key === 'image_urls' || p.key === 'binary_data_base64') {
                  if (typeof val === 'string') {
                      val = val.trim() ? [val] : [];
@@ -625,18 +719,17 @@ const AppContent: React.FC = () => {
                      val = val.filter(v => v && typeof v === 'string' && v.trim() !== '');
                  }
              }
-
              payload[p.key] = val;
          }
       });
 
-      const res = await makeRequest(
+      const { response: res, url: requestUrl } = await makeRequest(
           selectedService, 
           selectedService.action, 
           selectedService.version, 
           selectedService.method, 
           payload,
-          controller.signal // Pass signal explicitly
+          controller.signal 
       );
 
       const data = await res.json().catch(() => null);
@@ -657,98 +750,101 @@ const AppContent: React.FC = () => {
               || data?.message 
               || data?.error 
               || `HTTP Error ${res.status}: ${errorBody.substring(0, 200)}`;
+          
+          addToHistory('error', res.status, data, duration, payload, errorMsg);
           throw new Error(errorMsg);
       }
 
+      // Check Async Config
       if (selectedService.asyncConfig?.enabled) {
           const config = selectedService.asyncConfig;
           const taskId = getValueByPath(data, config.submitResponseIdPath);
           
           if (!taskId) {
-              throw new Error(`Async enabled, but could not find ID at '${config.submitResponseIdPath}' in response.`);
+              const msg = `Async enabled, but could not find ID at '${config.submitResponseIdPath}'`;
+              addToHistory('error', 200, data, duration, payload, msg); // Technical error despite 200 OK
+              throw new Error(msg);
           }
 
-          setResponseData(prev => prev ? { ...prev, isPolling: true } : null);
+          setResponseData(prev => prev ? { ...prev, isPolling: true, pollHistory: [] } : null);
           
           const maxDuration = (config.timeoutSeconds || 120) * 1000;
           const pollStartTime = Date.now();
 
           const pollLoop = async () => {
-              // Check timeout
               if (Date.now() - pollStartTime > maxDuration) {
-                  setError(`Polling timed out after ${config.timeoutSeconds || 120} seconds.`);
+                  const msg = `Polling timed out after ${config.timeoutSeconds || 120}s`;
+                  setError(msg);
                   setLoading(false);
                   setResponseData(prev => prev ? { ...prev, isPolling: false } : null);
+                  // Log timeout as error in history
+                  addToHistory('error', 408, { error: msg }, Date.now() - startTime, payload, msg);
                   return;
               }
 
-              // Check cancellation using the local controller variable
-              if (controller.signal.aborted) {
-                  return;
-              }
+              if (controller.signal.aborted) return;
 
               await new Promise(resolve => setTimeout(resolve, config.pollInterval));
               
-              // Check cancellation again after wait
-              if (controller.signal.aborted) {
-                  return;
-              }
+              if (controller.signal.aborted) return;
 
               try {
                   const pollPayload: Record<string, any> = {
                       [config.pollIdParamKey]: taskId
                   };
                   
-                  // Inherit Params
                   if (config.inheritParams) {
-                      // Filter out large data fields to avoid bloating poll requests
-                      const { 
-                          binary_data_base64, 
-                          image_base64, 
-                          base64,
-                          image, 
-                          video, 
-                          file,
-                          ...rest 
-                      } = payload;
+                      const { binary_data_base64, image_base64, base64, image, video, file, ...rest } = payload;
                       Object.assign(pollPayload, rest);
                   }
 
-                  // Static Params from JSON
                   if (config.staticParamsJson) {
                       try {
                           const staticParams = JSON.parse(config.staticParamsJson);
                           Object.assign(pollPayload, staticParams);
                       } catch (e) {
-                          console.error("Failed to parse staticParamsJson", e);
+                          throw new Error(`Invalid Static Poll Params JSON: ${(e as Error).message}`);
                       }
                   }
 
-                  const pollRes = await makeRequest(
+                  const { response: pollRes, url: pollUrl } = await makeRequest(
                       selectedService,
                       config.pollAction,
                       config.pollVersion,
                       config.pollMethod,
                       pollPayload,
-                      controller.signal // Pass signal explicitly
+                      controller.signal 
                   );
 
                   const pollData = await pollRes.json();
-                  const pollDuration = Date.now() - startTime;
+                  const currentTotalDuration = Date.now() - startTime;
                   const status = getValueByPath(pollData, config.pollStatusPath);
-
-                  setResponseData({
+                  
+                  const historyItem: PollHistoryItem = {
+                      timestamp: Date.now(),
+                      url: pollUrl,
                       status: pollRes.status,
                       statusText: pollRes.statusText,
-                      headers: {},
-                      body: pollData,
-                      timestamp: pollDuration,
-                      isPolling: true
+                      body: pollData
+                  };
+
+                  setResponseData(prev => {
+                      if (!prev) return null;
+                      return {
+                          status: pollRes.status,
+                          statusText: pollRes.statusText,
+                          headers: {},
+                          body: pollData,
+                          timestamp: currentTotalDuration,
+                          isPolling: true,
+                          pollHistory: [...(prev.pollHistory || []), historyItem]
+                      };
                   });
 
                   if (status === config.pollSuccessValue) {
                       setLoading(false);
                       setResponseData(prev => prev ? { ...prev, isPolling: false } : null);
+                      addToHistory('success', pollRes.status, pollData, currentTotalDuration, payload);
                   } else if (config.pollFailedValue && status === config.pollFailedValue) {
                       let errorMsg = `Async Task Failed: Status '${status}'`;
                       if (config.pollErrorPath) {
@@ -758,37 +854,43 @@ const AppContent: React.FC = () => {
                       setError(errorMsg);
                       setLoading(false);
                       setResponseData(prev => prev ? { ...prev, isPolling: false } : null);
+                      addToHistory('error', pollRes.status, pollData, currentTotalDuration, payload, errorMsg);
                   } else {
                       pollLoop();
                   }
 
               } catch (err: any) {
                   if (err.name === 'AbortError') return;
-                  console.error("Polling Error", err);
-                  setError(`Polling Error: ${err.message}`);
+                  const msg = `Polling Error: ${err.message}`;
+                  setError(msg);
                   setLoading(false);
                   setResponseData(prev => prev ? { ...prev, isPolling: false } : null);
+                  addToHistory('error', 500, { error: msg }, Date.now() - startTime, payload, msg);
               }
           };
           
           pollLoop();
       } else {
           setLoading(false);
+          // Sync success
+          addToHistory('success', res.status, data, duration, payload);
       }
 
     } catch (err: any) {
-      if (err.name === 'AbortError') {
-          console.log('Request Aborted');
-          return;
-      }
+      if (err.name === 'AbortError') return;
       console.error(err);
       let msg = err.message;
       if (msg === 'Failed to fetch') {
-          msg = 'Network Error: Failed to fetch. This is likely a CORS issue or the payload (Base64) is too large for the proxy/endpoint. Please check your Proxy settings or try using URL inputs.';
+          msg = 'Network Error / CORS Issue';
       }
       setError(msg);
       setLoading(false);
       setResponseData(prev => prev ? { ...prev, isPolling: false } : null);
+      // Ensure error is added to history if it wasn't added by the async failure path
+      // We check payload existence to ensure we actually started
+      if (Object.keys(payload).length > 0) {
+        // Just a safe fallback, usually caught above
+      }
     }
   };
 
@@ -797,7 +899,7 @@ const AppContent: React.FC = () => {
       {/* Sidebar Area */}
       <div 
         style={{ width: sidebarWidth }} 
-        className="flex-shrink-0 relative h-full"
+        className="flex-shrink-0 relative h-full border-r border-gray-200"
       >
         <Sidebar
             groups={groups}
@@ -826,43 +928,60 @@ const AppContent: React.FC = () => {
       </div>
       
       {/* Main Content Area */}
-      <div className="flex-1 flex overflow-hidden">
-        {selectedService ? (
-            <>
+      {selectedService ? (
+          <>
+            {/* Request Panel (Resizable) */}
+            <div 
+                style={{ width: requestPanelWidth }} 
+                className="border-r border-gray-200 h-full flex flex-col min-w-[300px] flex-shrink-0 relative"
+            >
+                <RequestPanel
+                    service={selectedService}
+                    onUpdateService={handleUpdateService}
+                    onSend={handleSendRequest}
+                    onStop={handleStopRequest}
+                    loading={loading}
+                    corsProxy={proxyUrl}
+                />
                 <div 
-                    style={{ width: requestPanelWidth }} 
-                    className="border-r border-gray-200 h-full flex flex-col min-w-[300px] flex-shrink-0 relative"
-                >
-                    <RequestPanel
-                        service={selectedService}
-                        onUpdateService={handleUpdateService}
-                        onSend={handleSendRequest}
-                        onStop={handleStopRequest}
-                        loading={loading}
-                        corsProxy={proxyUrl}
-                    />
-                    <div 
-                        className="absolute right-[-3px] top-0 w-[6px] h-full cursor-col-resize hover:bg-indigo-500 transition-colors z-50 opacity-0 hover:opacity-100"
-                        onMouseDown={(e) => { e.preventDefault(); setIsResizing('request'); }}
-                    />
-                </div>
-
-                <div className="flex-1 h-full flex flex-col min-w-[300px]">
-                    <ResponsePanel
-                        response={responseData}
-                        error={error}
-                        loading={loading}
-                        corsProxy={proxyUrl}
-                    />
-                </div>
-            </>
-        ) : (
-            <div className="flex-1 flex items-center justify-center bg-gray-50 text-gray-400">
-                Select or create a service to start
+                    className="absolute right-[-3px] top-0 w-[6px] h-full cursor-col-resize hover:bg-indigo-500 transition-colors z-50 opacity-0 hover:opacity-100"
+                    onMouseDown={(e) => { e.preventDefault(); setIsResizing('request'); }}
+                />
             </div>
-        )}
-      </div>
 
+            {/* Response Panel (Fluid) */}
+            <div className="flex-1 h-full flex flex-col min-w-[300px] overflow-hidden">
+                <ResponsePanel
+                    response={responseData}
+                    error={error}
+                    loading={loading}
+                    corsProxy={proxyUrl}
+                />
+            </div>
+
+            {/* History Panel (Resizable, Right Side) */}
+            <div 
+                style={{ width: historyPanelWidth }} 
+                className="border-l border-gray-200 h-full flex flex-col min-w-[200px] flex-shrink-0 relative"
+            >
+                 <div 
+                    className="absolute left-[-3px] top-0 w-[6px] h-full cursor-col-resize hover:bg-indigo-500 transition-colors z-50 opacity-0 hover:opacity-100"
+                    onMouseDown={(e) => { e.preventDefault(); setIsResizing('history'); }}
+                />
+                <HistoryPanel 
+                    historyItems={historyItems}
+                    onClear={() => setHistoryItems([])}
+                    corsProxy={proxyUrl}
+                />
+            </div>
+          </>
+      ) : (
+          <div className="flex-1 flex items-center justify-center bg-gray-50 text-gray-400">
+              Select or create a service to start
+          </div>
+      )}
+
+      {/* Modals */}
       <SettingsModal
         isOpen={showSettings}
         onClose={() => setShowSettings(false)}

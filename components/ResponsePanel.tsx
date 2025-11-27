@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { ResponseData } from '../types';
-import { Image as ImageIcon, FileJson, AlertCircle, Copy, Check, Video, WrapText, Loader2, Download, PlayCircle, Key } from 'lucide-react';
+import { Image as ImageIcon, FileJson, AlertCircle, Copy, Check, Video, WrapText, Loader2, Download, PlayCircle, Key, Bug, Clock, Lock } from 'lucide-react';
 import { useLanguage } from '../i18n';
 
 interface ResponsePanelProps {
@@ -216,7 +216,7 @@ const MediaList: React.FC<{
 
 const ResponsePanel: React.FC<ResponsePanelProps> = ({ response, error, loading, corsProxy }) => {
   const { t } = useLanguage();
-  const [activeTab, setActiveTab] = useState<'preview' | 'raw'>('preview');
+  const [activeTab, setActiveTab] = useState<'preview' | 'raw' | 'debug'>('preview');
   const [copied, setCopied] = useState(false);
   const [wordWrap, setWordWrap] = useState(true);
 
@@ -378,6 +378,7 @@ const ResponsePanel: React.FC<ResponsePanelProps> = ({ response, error, loading,
   };
 
   const mediaItems = extractMedia(response.body);
+  const showDebug = response.isPolling || (response.pollHistory && response.pollHistory.length > 0);
 
   return (
     <div className="h-full bg-white border-l border-gray-200 flex flex-col w-full min-w-0 relative">
@@ -400,6 +401,11 @@ const ResponsePanel: React.FC<ResponsePanelProps> = ({ response, error, loading,
             <div className={`px-2 py-1 rounded text-xs font-bold uppercase tracking-wide shrink-0 ${response.status >= 200 && response.status < 300 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                 {response.status} {response.statusText}
             </div>
+            {response.pollHistory && (
+                <div className="px-2 py-1 rounded text-xs font-bold bg-cyan-100 text-cyan-700 uppercase tracking-wide shrink-0">
+                    {response.pollHistory.length} Polls
+                </div>
+            )}
         </div>
         <div className="flex bg-gray-200 rounded-md p-0.5 shrink-0">
             <button 
@@ -414,6 +420,14 @@ const ResponsePanel: React.FC<ResponsePanelProps> = ({ response, error, loading,
             >
                 {t.response.raw}
             </button>
+            {showDebug && (
+                 <button 
+                    onClick={() => setActiveTab('debug')}
+                    className={`px-3 py-1 text-xs font-medium rounded transition-all flex items-center gap-1 ${activeTab === 'debug' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                    <Bug size={12} /> Debug
+                </button>
+            )}
         </div>
       </div>
 
@@ -435,7 +449,7 @@ const ResponsePanel: React.FC<ResponsePanelProps> = ({ response, error, loading,
                 )}
             </div>
         </div>
-      ) : (
+      ) : activeTab === 'raw' ? (
         <div className="flex-1 flex flex-col h-full overflow-hidden min-w-0 bg-slate-900">
             <div className="flex items-center justify-end gap-2 p-2 bg-slate-800 border-b border-slate-700 flex-shrink-0">
                 <button
@@ -466,6 +480,57 @@ const ResponsePanel: React.FC<ResponsePanelProps> = ({ response, error, loading,
                 </pre>
             </div>
         </div>
+      ) : (
+          /* Debug Tab */
+          <div className="flex-1 overflow-y-auto p-0 bg-gray-50">
+             <div className="p-4 space-y-4">
+                 <h3 className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                     <Clock size={16} /> Polling History
+                 </h3>
+                 
+                 {!response.pollHistory || response.pollHistory.length === 0 ? (
+                     <div className="text-sm text-gray-400 italic p-4 text-center">No polling history available yet.</div>
+                 ) : (
+                     <div className="space-y-3">
+                         {response.pollHistory.map((item, i) => (
+                             <div key={i} className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+                                 <div className="px-3 py-2 bg-gray-50 border-b border-gray-100 flex items-center justify-between text-xs">
+                                     <div className="flex items-center gap-2">
+                                         <span className="font-bold text-gray-600">#{i + 1}</span>
+                                         <span className="text-gray-400 font-mono">{new Date(item.timestamp).toLocaleTimeString()}</span>
+                                     </div>
+                                     <div className={`font-bold ${item.status === 200 ? 'text-green-600' : 'text-red-600'}`}>
+                                         {item.status} {item.statusText}
+                                     </div>
+                                 </div>
+                                 <div className="p-3 text-xs font-mono break-all text-gray-600 bg-white">
+                                     <div className="font-semibold text-gray-400 mb-1 flex items-center gap-2">
+                                         Request URL:
+                                         <div className="group relative">
+                                            <Lock size={10} className="text-amber-500 cursor-help" />
+                                            <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-48 bg-gray-800 text-white text-[10px] p-2 rounded hidden group-hover:block z-50">
+                                                Link requires Authorization headers. Cannot be opened directly in browser.
+                                            </div>
+                                         </div>
+                                     </div>
+                                     <div className="p-2 bg-gray-100 rounded text-gray-800 mb-2 border border-gray-200 select-all">
+                                         {item.url}
+                                     </div>
+                                     {item.body && (
+                                         <>
+                                            <div className="font-semibold text-gray-400 mb-1">Response Body:</div>
+                                            <pre className="p-2 bg-slate-800 text-slate-300 rounded overflow-x-auto border border-slate-700">
+                                                {JSON.stringify(item.body, null, 2)}
+                                            </pre>
+                                         </>
+                                     )}
+                                 </div>
+                             </div>
+                         ))}
+                     </div>
+                 )}
+             </div>
+          </div>
       )}
       
       <style>{`

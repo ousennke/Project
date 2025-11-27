@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { ApiService, ServiceGroup, AsyncConfig } from '../types';
-import { X, Save, Globe, Link as LinkIcon, Layers, Tag, Trash2, AlertTriangle, Repeat, Clock, Code2, Copy } from 'lucide-react';
+import { X, Save, Globe, Link as LinkIcon, Layers, Tag, Trash2, AlertTriangle, Repeat, Clock, Code2, Copy, Info } from 'lucide-react';
 import { useLanguage } from '../i18n';
 
 interface ServiceSettingsModalProps {
@@ -29,6 +29,7 @@ const ServiceSettingsModal: React.FC<ServiceSettingsModalProps> = ({
   const [formData, setFormData] = useState<ApiService | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('basic');
+  const [jsonError, setJsonError] = useState<string | null>(null);
   
   // Track the ID of the service currently loaded in the form to prevent 
   // unwanted resets when the parent component updates the service object reference.
@@ -37,6 +38,7 @@ const ServiceSettingsModal: React.FC<ServiceSettingsModalProps> = ({
   useEffect(() => {
     if (!isOpen) {
         lastServiceIdRef.current = null;
+        setJsonError(null);
         return;
     }
 
@@ -48,15 +50,15 @@ const ServiceSettingsModal: React.FC<ServiceSettingsModalProps> = ({
       if (!initialData.asyncConfig) {
           initialData.asyncConfig = {
               enabled: false,
-              pollAction: 'Poll Action',
+              pollAction: 'CVSync2AsyncGetResult',
               pollVersion: service.version,
-              pollMethod: 'POST',
+              pollMethod: 'POST', // Default to POST for VolcEngine Async
               submitResponseIdPath: 'data.task_id',
               pollIdParamKey: 'task_id',
               pollStatusPath: 'data.status',
               pollSuccessValue: 'done',
               staticParamsJson: '{"req_key": "..."}',
-              inheritParams: false,
+              inheritParams: true, // Default to true as per user feedback
               pollInterval: 2000,
               timeoutSeconds: 120,
               maxRetries: 150
@@ -67,6 +69,7 @@ const ServiceSettingsModal: React.FC<ServiceSettingsModalProps> = ({
       setIsDeleting(false);
       setActiveTab('basic');
       lastServiceIdRef.current = service.id;
+      setJsonError(null);
     }
   }, [service, isOpen]);
 
@@ -234,6 +237,18 @@ const ServiceSettingsModal: React.FC<ServiceSettingsModalProps> = ({
                                 placeholder="ActionName"
                             />
                         </div>
+                        
+                        <div className="col-span-2">
+                             <label className="block text-xs font-medium text-gray-500 mb-1">Method</label>
+                             <select
+                                value={formData.method}
+                                onChange={(e) => handleChange('method', e.target.value)}
+                                className="w-full p-2 border border-gray-300 rounded text-sm font-mono bg-white"
+                             >
+                                 <option value="POST">POST</option>
+                                 <option value="GET">GET</option>
+                             </select>
+                        </div>
                     </div>
                 </div>
 
@@ -285,7 +300,7 @@ const ServiceSettingsModal: React.FC<ServiceSettingsModalProps> = ({
                         {/* Polling Request */}
                         <div>
                             <h5 className="text-xs font-bold text-gray-500 uppercase mb-3">{t.serviceSettings.pollingRequest}</h5>
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-2 gap-3 mb-3">
                                 <div>
                                     <label className="block text-xs font-medium text-gray-500 mb-1">{t.serviceSettings.pollAction}</label>
                                     <input
@@ -307,20 +322,61 @@ const ServiceSettingsModal: React.FC<ServiceSettingsModalProps> = ({
                                     />
                                 </div>
                             </div>
+                            
+                             {/* Method Selector */}
+                             <div>
+                                <label className="block text-xs font-medium text-gray-500 mb-1">Method</label>
+                                <select
+                                    value={formData.asyncConfig.pollMethod}
+                                    onChange={(e) => handleAsyncChange('pollMethod', e.target.value)}
+                                    className="w-full p-2 border border-gray-300 rounded text-sm font-mono bg-white"
+                                >
+                                    <option value="POST">POST</option>
+                                    <option value="GET">GET</option>
+                                </select>
+                            </div>
                         </div>
 
-                        {/* JSON Editor for Static Params - Moved Here */}
+                        {/* JSON Editor for Static Params */}
                         <div>
                             <label className="block text-xs font-medium text-gray-500 mb-1 flex items-center gap-1">
                                 <Code2 size={12} /> {t.serviceSettings.staticParams}
                             </label>
                             <textarea
                                 value={formData.asyncConfig.staticParamsJson || '{}'}
-                                onChange={(e) => handleAsyncChange('staticParamsJson', e.target.value)}
-                                className="w-full p-3 border border-gray-300 rounded text-xs font-mono h-24 focus:ring-2 focus:ring-indigo-500 outline-none resize-none bg-slate-50"
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    handleAsyncChange('staticParamsJson', val);
+                                    if (!val.trim()) {
+                                        setJsonError(null);
+                                        return;
+                                    }
+                                    try {
+                                        JSON.parse(val);
+                                        setJsonError(null);
+                                    } catch(err: any) {
+                                        setJsonError(err.message);
+                                    }
+                                }}
+                                className={`w-full p-3 border rounded text-xs font-mono h-24 focus:ring-2 focus:ring-indigo-500 outline-none resize-none bg-slate-50 ${jsonError ? 'border-red-300' : 'border-gray-300'}`}
                                 placeholder='{"req_key": "..."}'
                             />
-                            <p className="text-[10px] text-gray-400 mt-1">{t.serviceSettings.staticParamsHint}</p>
+                            {jsonError ? (
+                                <p className="text-[10px] text-red-500 mt-1 flex items-center gap-1 font-semibold">
+                                    <AlertTriangle size={10} /> {jsonError}
+                                </p>
+                            ) : (
+                                <div className="text-[10px] text-gray-500 mt-1.5 space-y-1.5 bg-gray-50 p-2 rounded border border-gray-200">
+                                    <p>{t.serviceSettings.staticParamsHint}</p>
+                                    <p className="flex items-start gap-1 text-indigo-600">
+                                        <Info size={12} className="mt-0.5 shrink-0"/> 
+                                        <span className="font-mono">
+                                            <b>Tip:</b> <code>return_url</code> must be inside a JSON string. <br/>
+                                            Ex: <code>{`{"req_json": "{\\"return_url\\":true}"}`}</code>
+                                        </span>
+                                    </p>
+                                </div>
+                            )}
                         </div>
 
                         {/* Polling Logic */}
@@ -394,7 +450,7 @@ const ServiceSettingsModal: React.FC<ServiceSettingsModalProps> = ({
                                         className="w-full p-2 border border-gray-300 rounded text-sm"
                                     />
                                 </div>
-                                <div className="flex items-end pb-2">
+                                <div className="flex flex-col justify-end pb-1">
                                      <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-gray-700">
                                         <input 
                                             type="checkbox" 
@@ -404,6 +460,9 @@ const ServiceSettingsModal: React.FC<ServiceSettingsModalProps> = ({
                                         />
                                         {t.serviceSettings.inheritParams}
                                     </label>
+                                    <div className="text-[9px] text-gray-400 mt-1 leading-tight">
+                                        Merges params like "req_key" from the submit request.
+                                    </div>
                                 </div>
                              </div>
                         </div>
@@ -461,7 +520,8 @@ const ServiceSettingsModal: React.FC<ServiceSettingsModalProps> = ({
                 onSave(formData);
                 onClose();
                 }}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-all"
+                disabled={!!jsonError}
+                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium text-white rounded-lg shadow-sm transition-all ${jsonError ? 'bg-gray-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}
             >
                 <Save size={16} />
                 {t.common.save}
