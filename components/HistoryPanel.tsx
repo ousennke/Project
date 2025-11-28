@@ -76,21 +76,28 @@ const VideoThumbnail: React.FC<{ url: string; corsProxy?: string }> = ({ url, co
         let objectUrl: string | null = null;
 
         const fetchVideo = async () => {
+            // If it's already a blob URL, just use it directly
+            if (url.startsWith('blob:')) {
+                setVideoSrc(url);
+                setLoading(false);
+                return;
+            }
+
             try {
                 setLoading(true);
                 const fetchUrl = corsProxy ? `${corsProxy}${url}` : url;
                 // Use no-referrer to bypass hotlink protection (403 Forbidden)
                 // Use credentials: 'omit' to prevent sending cookies/auth headers which might trigger stricter checks
-                const res = await fetch(fetchUrl, { 
+                const res = await fetch(fetchUrl, {
                     referrerPolicy: 'no-referrer',
                     credentials: 'omit'
                 });
-                
+
                 if (!res.ok) throw new Error('Fetch failed');
-                
+
                 const blob = await res.blob();
                 objectUrl = URL.createObjectURL(blob);
-                
+
                 if (isMounted) {
                     setVideoSrc(objectUrl);
                     setLoading(false);
@@ -99,7 +106,7 @@ const VideoThumbnail: React.FC<{ url: string; corsProxy?: string }> = ({ url, co
                 // Fallback to direct URL if blob fetch fails (e.g. CORS)
                 // This might still 403 if referrer is checked, but it's the best fallback
                 if (isMounted) {
-                    setVideoSrc(url); 
+                    setVideoSrc(url);
                     setLoading(false);
                 }
             }
@@ -114,9 +121,9 @@ const VideoThumbnail: React.FC<{ url: string; corsProxy?: string }> = ({ url, co
     }, [url, corsProxy]);
 
     return (
-        <div 
+        <div
             className="w-full h-full relative bg-black group"
-            onMouseEnter={() => videoRef.current?.play().catch(() => {})}
+            onMouseEnter={() => videoRef.current?.play().catch(() => { })}
             onMouseLeave={() => {
                 if (videoRef.current) {
                     videoRef.current.pause();
@@ -131,7 +138,7 @@ const VideoThumbnail: React.FC<{ url: string; corsProxy?: string }> = ({ url, co
             )}
 
             {videoSrc && (
-                <video 
+                <video
                     ref={videoRef}
                     src={videoSrc}
                     className={`w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity ${loading ? 'invisible' : 'visible'}`}
@@ -180,7 +187,7 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ historyItems, onClear, cors
             // Single root folder
             const zipName = `volc_history_${new Date().toISOString().split('T')[0]}`;
             const root = zip.folder(zipName);
-            
+
             if (!root) throw new Error("Failed to create zip folder");
 
             // Process items
@@ -188,7 +195,7 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ historyItems, onClear, cors
                 const item = historyItems[i];
                 const timeStr = formatTime(item.timestamp);
                 const serviceName = sanitizeFileName(item.serviceName);
-                
+
                 // Base filename: Time + ServiceName
                 const baseFilename = `${timeStr}_${serviceName}`;
 
@@ -206,7 +213,7 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ historyItems, onClear, cors
                     request: item.requestPayload,
                     response: item.responseBody
                 };
-                
+
                 const jsonName = `${baseFilename}.json`;
                 root.file(jsonName, JSON.stringify(meta, null, 2));
 
@@ -214,7 +221,7 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ historyItems, onClear, cors
                 if (item.status === 'success' && item.mediaItems.length > 0) {
                     for (let j = 0; j < item.mediaItems.length; j++) {
                         const media = item.mediaItems[j];
-                        
+
                         // Suffix for multiple files: _1, _2
                         const suffix = item.mediaItems.length > 1 ? `_${j + 1}` : '';
                         const fileStem = `${baseFilename}${suffix}`;
@@ -233,14 +240,20 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ historyItems, onClear, cors
                             }
 
                             // Handle URL download
-                            const fetchUrl = corsProxy ? `${corsProxy}${media.url}` : media.url;
-                            
+                            // Check for cached blob URL first
+                            let fetchUrl = media.url;
+                            if (media.blobUrl) {
+                                fetchUrl = media.blobUrl;
+                            } else if (corsProxy) {
+                                fetchUrl = `${corsProxy}${media.url}`;
+                            }
+
                             // Add no-referrer and omit credentials to avoid 403 on protected assets
-                            const res = await fetch(fetchUrl, { 
+                            const res = await fetch(fetchUrl, {
                                 referrerPolicy: 'no-referrer',
                                 credentials: 'omit'
                             });
-                            
+
                             if (res.ok) {
                                 const blob = await res.blob();
                                 const ext = getExtension(blob.type, media.type, media.url);
@@ -284,7 +297,7 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ historyItems, onClear, cors
                     </div>
                 </div>
                 <div className="flex gap-2">
-                    <button 
+                    <button
                         onClick={handleDownloadZip}
                         disabled={isZipping || historyItems.length === 0}
                         className={`p-1.5 rounded transition-colors ${isZipping || historyItems.length === 0 ? 'text-gray-300' : 'text-indigo-600 hover:bg-indigo-100'}`}
@@ -292,7 +305,7 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ historyItems, onClear, cors
                     >
                         {isZipping ? <Loader2 size={16} className="animate-spin" /> : <Archive size={16} />}
                     </button>
-                    <button 
+                    <button
                         onClick={() => setShowConfirmClear(true)}
                         disabled={historyItems.length === 0}
                         className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors disabled:opacity-30"
@@ -315,7 +328,7 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ historyItems, onClear, cors
                     <div key={item.id} className="relative pl-4 border-l-2 border-gray-100 pb-2 last:pb-0">
                         {/* Timeline Dot */}
                         <div className={`absolute -left-[5px] top-0 w-2.5 h-2.5 rounded-full border-2 border-white ${item.status === 'success' ? 'bg-indigo-500' : 'bg-red-500'}`}></div>
-                        
+
                         <div className="text-[10px] text-gray-400 mb-1 flex justify-between items-center font-mono">
                             <span>{new Date(item.timestamp).toLocaleTimeString()}</span>
                             <span className="opacity-60">{item.duration}ms</span>
@@ -325,7 +338,7 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ historyItems, onClear, cors
                             {/* Service Name Badge */}
                             <div className="px-2 py-1 bg-white border-b border-gray-100 text-[10px] font-medium text-gray-600 truncate flex justify-between items-center">
                                 <span className="truncate max-w-[120px]" title={item.serviceName}>{item.serviceName}</span>
-                                <button 
+                                <button
                                     onClick={() => setSelectedItem(item)}
                                     className="text-gray-300 hover:text-indigo-600 transition-colors"
                                     title="View JSON"
@@ -345,15 +358,15 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ historyItems, onClear, cors
                                         {item.mediaItems.length > 0 ? (
                                             <div className="grid grid-cols-2 gap-1">
                                                 {item.mediaItems.slice(0, 4).map((media, idx) => (
-                                                    <div 
-                                                        key={idx} 
+                                                    <div
+                                                        key={idx}
                                                         className="aspect-square bg-gray-200 rounded overflow-hidden relative group/media cursor-zoom-in"
                                                         onClick={() => setPreviewMedia(media)}
                                                     >
                                                         {media.type === 'image' ? (
                                                             <img src={media.url} className="w-full h-full object-cover" loading="lazy" referrerPolicy="no-referrer" />
                                                         ) : (
-                                                            <VideoThumbnail url={media.url} corsProxy={corsProxy} />
+                                                            <VideoThumbnail url={media.blobUrl || media.url} corsProxy={corsProxy} />
                                                         )}
                                                         {/* Source Key Hint */}
                                                         <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-[8px] text-white p-0.5 truncate opacity-0 group-hover/media:opacity-100 transition-opacity">
@@ -402,7 +415,7 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ historyItems, onClear, cors
                             </span>
                             <span className="text-xs text-gray-400 ml-2 font-mono">{selectedItem.id}</span>
                         </div>
-                        
+
                         {selectedItem.errorMsg && (
                             <div className="mb-4 p-2 bg-red-50 text-red-700 text-xs rounded border border-red-100 font-mono break-all">
                                 {selectedItem.errorMsg}
@@ -424,51 +437,51 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ historyItems, onClear, cors
 
             {/* Media Preview Modal (Fullscreen) */}
             {previewMedia && (
-                <div 
+                <div
                     className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-in fade-in zoom-in duration-200"
                     onClick={() => setPreviewMedia(null)}
                 >
-                    <button 
-                        onClick={() => setPreviewMedia(null)} 
+                    <button
+                        onClick={() => setPreviewMedia(null)}
                         className="absolute top-4 right-4 text-white/50 hover:text-white p-2 rounded-full hover:bg-white/10 transition-colors"
                     >
                         <X size={24} />
                     </button>
 
-                    <div 
+                    <div
                         className="relative max-w-full max-h-full overflow-hidden flex flex-col items-center justify-center"
                         onClick={e => e.stopPropagation()}
                     >
                         {previewMedia.type === 'image' ? (
-                            <img 
-                                src={previewMedia.url} 
-                                className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl" 
-                                alt="Full Preview" 
+                            <img
+                                src={previewMedia.url}
+                                className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl"
+                                alt="Full Preview"
                                 referrerPolicy="no-referrer"
                             />
                         ) : (
-                            <video 
-                                src={previewMedia.url} 
-                                className="max-w-full max-h-[85vh] rounded-lg shadow-2xl outline-none" 
-                                controls 
-                                autoPlay 
+                            <video
+                                src={previewMedia.url}
+                                className="max-w-full max-h-[85vh] rounded-lg shadow-2xl outline-none"
+                                controls
+                                autoPlay
                             />
                         )}
-                        
+
                         <div className="mt-4 flex gap-4">
-                            <a 
-                                href={previewMedia.url} 
-                                download 
-                                target="_blank" 
+                            <a
+                                href={previewMedia.url}
+                                download
+                                target="_blank"
                                 rel="noreferrer"
                                 className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-full text-sm font-medium transition-colors"
                             >
                                 <Download size={16} />
                                 {t.common.download}
                             </a>
-                            <a 
-                                href={previewMedia.url} 
-                                target="_blank" 
+                            <a
+                                href={previewMedia.url}
+                                target="_blank"
                                 rel="noreferrer"
                                 className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full text-sm font-medium transition-colors"
                             >
@@ -479,8 +492,8 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ historyItems, onClear, cors
                     </div>
                 </div>
             )}
-            
-            <ConfirmDialog 
+
+            <ConfirmDialog
                 isOpen={showConfirmClear}
                 title={t.history.clear}
                 message={t.sidebar.confirmDelete}
