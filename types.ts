@@ -27,23 +27,23 @@ export interface AsyncConfig {
   pollAction: string; // e.g., CVSync2AsyncGetResult
   pollVersion: string; // e.g., 2022-08-31
   pollMethod: 'POST' | 'GET';
-  
+
   // How to find the ID in the submit response
   submitResponseIdPath: string; // e.g., data.task_id
-  
+
   // How to send the ID in the poll request
   pollIdParamKey: string; // e.g., task_id
-  
+
   // Status check
   pollStatusPath: string; // e.g., data.status
   pollSuccessValue: string; // e.g., done
   pollFailedValue?: string; // e.g., failed
   pollErrorPath?: string; // e.g., data.error_message
-  
+
   // Extra params needed for polling (e.g. req_key)
   staticParamsJson: string; // JSON string for static params
   inheritParams?: boolean; // If true, merge submit params into poll request
-  
+
   pollInterval: number; // ms, default 2000
   timeoutSeconds: number; // seconds, default 120
   maxRetries: number; // default 60 (can be derived from timeout/interval, but kept for compatibility if needed)
@@ -71,11 +71,11 @@ export interface Credentials {
 }
 
 export interface PollHistoryItem {
-    timestamp: number;
-    url: string;
-    status: number;
-    statusText: string;
-    body?: any;
+  timestamp: number;
+  url: string;
+  status: number;
+  statusText: string;
+  body?: any;
 }
 
 export interface ResponseData {
@@ -89,23 +89,24 @@ export interface ResponseData {
 }
 
 export interface MediaItem {
-    type: 'image' | 'video';
-    url: string;
-    sourceKey: string;
+  type: 'image' | 'video';
+  url: string;
+  sourceKey: string;
+  blobUrl?: string;
 }
 
 export interface HistoryItem {
-    id: string;
-    timestamp: number;
-    serviceName: string;
-    action: string;
-    status: 'success' | 'error';
-    statusCode: number;
-    duration: number;
-    responseBody: any;
-    requestPayload?: any; // Optional: store what was sent
-    mediaItems: MediaItem[];
-    errorMsg?: string;
+  id: string;
+  timestamp: number;
+  serviceName: string;
+  action: string;
+  status: 'success' | 'error';
+  statusCode: number;
+  duration: number;
+  responseBody: any;
+  requestPayload?: any; // Optional: store what was sent
+  mediaItems: MediaItem[];
+  errorMsg?: string;
 }
 
 export enum ContentType {
