@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { ApiService, ApiParam } from '../types';
-import { Plus, Trash2, Play, ExternalLink, Code, List, WrapText, Settings, HelpCircle, Square, GripVertical, Clock, Zap, FileText } from 'lucide-react';
+import { Plus, Trash2, Play, ExternalLink, Code, List, WrapText, Settings, HelpCircle, Square, GripVertical, Clock, Zap, FileText, Info } from 'lucide-react';
 import ParamConfigModal from './ParamConfigModal';
 import FileParamInput from './FileParamInput';
 import StringArrayInput from './StringArrayInput';
@@ -339,135 +339,144 @@ const RequestPanel: React.FC<RequestPanelProps> = ({
                   onDragOver={(e) => handleDragOver(e, param.id)}
                   onDragLeave={handleDragLeave}
                   onDrop={(e) => handleDrop(e, param.id)}
-                  className={`relative flex items-start gap-2 group bg-white p-3 rounded border transition-all shadow-sm ${draggedParamId === param.id ? 'opacity-40 border-dashed border-indigo-300' : isEnabled ? 'border-gray-200 hover:border-indigo-300' : 'border-gray-200 opacity-60 grayscale bg-gray-50/50'}`}
+                  className={`relative group bg-white rounded border transition-all shadow-sm ${draggedParamId === param.id ? 'opacity-40 border-dashed border-indigo-300' : isEnabled ? 'border-gray-200 hover:border-indigo-300' : 'border-gray-200 opacity-60 grayscale bg-gray-50/50'}`}
                 >
                   {/* Drop Position Indicators */}
                   {showLineTop && <div className="absolute -top-1.5 left-0 right-0 h-1 bg-indigo-500 rounded-full z-20 pointer-events-none shadow" />}
                   {showLineBottom && <div className="absolute -bottom-1.5 left-0 right-0 h-1 bg-indigo-500 rounded-full z-20 pointer-events-none shadow" />}
 
-                  {/* Drag Handle */}
-                  <div 
-                    className="mt-2 cursor-grab text-gray-300 hover:text-gray-500 active:cursor-grabbing flex-shrink-0"
-                    title={t.request.dragReorder}
-                  >
-                      <GripVertical size={16} />
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1 h-5">
-                      <label className={`block text-xs font-semibold truncate ${isEnabled ? 'text-gray-500' : 'text-gray-400'}`}>{t.request.key}</label>
-                      {param.description && (
-                          <div className="text-gray-400 group/tooltip relative cursor-help flex items-center">
-                              <HelpCircle size={12} />
-                              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover/tooltip:opacity-100 pointer-events-none whitespace-nowrap z-10 shadow-lg transition-opacity">
-                                  {param.description}
-                                  <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-800"></div>
-                              </div>
-                          </div>
-                      )}
+                  <div className="flex items-start gap-2 p-3 pb-2">
+                    {/* Drag Handle */}
+                    <div 
+                        className="mt-2 cursor-grab text-gray-300 hover:text-gray-500 active:cursor-grabbing flex-shrink-0"
+                        title={t.request.dragReorder}
+                    >
+                        <GripVertical size={16} />
                     </div>
-                    <input
-                      type="text"
-                      disabled={!isEnabled}
-                      value={param.key}
-                      onChange={(e) => {
-                          const newParams = service.params.map(p => p.id === param.id ? {...p, key: e.target.value} : p);
-                          onUpdateService({...service, params: newParams});
-                      }}
-                      className="w-full text-sm font-medium text-slate-800 border border-gray-200 rounded p-1.5 focus:ring-1 focus:ring-indigo-500 outline-none transition-shadow disabled:bg-transparent disabled:text-gray-400"
-                      placeholder="Key Name"
-                    />
-                  </div>
-                  
-                  <div className="flex-[2] min-w-0">
-                    <label className={`block text-xs font-semibold mb-1 truncate flex items-center justify-between h-5 ${isEnabled ? 'text-gray-500' : 'text-gray-400'}`}>
-                        <span>{t.request.value}</span>
-                        <div className="flex items-center gap-2">
-                             {param.type === 'string' && param.enableMultiString && <span className="text-[10px] bg-purple-50 text-purple-600 px-1 rounded">Array</span>}
-                             <span className={`text-[10px] font-mono px-1.5 rounded ${isEnabled ? 'text-indigo-500 bg-indigo-50' : 'text-gray-400 bg-gray-100'}`}>{type}</span>
-                        </div>
-                    </label>
-                    
-                    {isEnabled ? (
-                        <>
-                            {type === 'boolean' ? (
-                            <select
-                                value={String(param.value)}
-                                onChange={(e) => handleParamChange(param.id, e.target.value === 'true')}
-                                className="w-full bg-white text-sm border border-gray-200 rounded p-1.5 focus:ring-1 focus:ring-indigo-500 outline-none"
-                            >
-                                <option value="true">true</option>
-                                <option value="false">false</option>
-                            </select>
-                            ) : type === 'json' ? (
-                                <div className="relative">
-                                <textarea
-                                    value={typeof param.value === 'string' ? param.value : JSON.stringify(param.value)}
-                                    onChange={(e) => handleParamChange(param.id, e.target.value)}
-                                    className="w-full text-xs font-mono text-slate-800 border border-gray-200 rounded p-1.5 focus:ring-1 focus:ring-indigo-500 outline-none min-h-[2.4rem] resize-y"
-                                    placeholder="{}"
-                                    rows={1}
-                                />
-                                </div>
-                            ) : type === 'file' ? (
-                                <FileParamInput 
-                                value={String(param.value)}
-                                onChange={(val) => handleParamChange(param.id, val)}
-                                enableUrl={param.enableUrlConversion !== false}
-                                enableBase64={param.enableBase64Conversion !== false}
-                                enableMulti={param.enableMultiFile !== false}
-                                corsProxy={corsProxy}
-                                />
-                            ) : (type === 'string' && param.enableMultiString) ? (
-                                <StringArrayInput 
-                                    value={param.value} 
-                                    onChange={(val) => handleParamChange(param.id, val)}
-                                />
-                            ) : (
-                            <input
-                                type={type === 'integer' || type === 'float' ? 'number' : 'text'}
-                                step={type === 'float' ? 'any' : '1'}
-                                value={String(param.value)}
-                                onChange={(e) => {
-                                let val: string | number = e.target.value;
-                                if (type === 'integer') val = parseInt(e.target.value);
-                                if (type === 'float') val = parseFloat(e.target.value);
-                                // Handle NaN for empty input
-                                if (typeof val === 'number' && isNaN(val)) val = 0; 
-                                // If input is just text for number fields (like minus sign), keep as is to allow typing
-                                if (e.target.value === '' || e.target.value === '-') val = e.target.value;
-                                
-                                handleParamChange(param.id, val);
-                                }}
-                                className="w-full text-sm text-slate-800 border border-gray-200 rounded p-1.5 focus:ring-1 focus:ring-indigo-500 outline-none transition-shadow"
-                                placeholder="Value"
-                            />
-                            )}
-                        </>
-                    ) : (
-                        <div className="w-full border border-gray-200 rounded p-1.5 bg-gray-50 text-sm text-gray-400 h-[34px] flex items-center">
-                            <span className="truncate italic">Disabled</span>
-                        </div>
-                    )}
 
+                    <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1 h-5">
+                        <label className={`block text-xs font-semibold truncate ${isEnabled ? 'text-gray-500' : 'text-gray-400'}`}>{t.request.key}</label>
+                        </div>
+                        <input
+                        type="text"
+                        disabled={!isEnabled}
+                        value={param.key}
+                        onChange={(e) => {
+                            const newParams = service.params.map(p => p.id === param.id ? {...p, key: e.target.value} : p);
+                            onUpdateService({...service, params: newParams});
+                        }}
+                        className="w-full text-sm font-medium text-slate-800 border border-gray-200 rounded p-1.5 focus:ring-1 focus:ring-indigo-500 outline-none transition-shadow disabled:bg-transparent disabled:text-gray-400 h-[34px]"
+                        placeholder="Key Name"
+                        />
+                    </div>
+                    
+                    <div className="flex-[2] min-w-0">
+                        <label className={`block text-xs font-semibold mb-1 truncate flex items-center justify-between h-5 ${isEnabled ? 'text-gray-500' : 'text-gray-400'}`}>
+                            <span>{t.request.value}</span>
+                            <div className="flex items-center gap-2">
+                                {param.type === 'string' && param.enableMultiString && <span className="text-[10px] bg-purple-50 text-purple-600 px-1 rounded">Array</span>}
+                                <span className={`text-[10px] font-mono px-1.5 rounded ${isEnabled ? 'text-indigo-500 bg-indigo-50' : 'text-gray-400 bg-gray-100'}`}>{type}</span>
+                            </div>
+                        </label>
+                        
+                        {isEnabled ? (
+                            <>
+                                {type === 'boolean' ? (
+                                <select
+                                    value={String(param.value)}
+                                    onChange={(e) => handleParamChange(param.id, e.target.value === 'true')}
+                                    className="w-full bg-white text-sm border border-gray-200 rounded p-1.5 focus:ring-1 focus:ring-indigo-500 outline-none h-[34px]"
+                                >
+                                    <option value="true">true</option>
+                                    <option value="false">false</option>
+                                </select>
+                                ) : type === 'json' ? (
+                                    <div className="relative">
+                                    <textarea
+                                        value={typeof param.value === 'string' ? param.value : JSON.stringify(param.value)}
+                                        onChange={(e) => handleParamChange(param.id, e.target.value)}
+                                        className="w-full text-xs font-mono text-slate-800 border border-gray-200 rounded p-1.5 focus:ring-1 focus:ring-indigo-500 outline-none min-h-[2.4rem] resize-y"
+                                        placeholder="{}"
+                                        rows={1}
+                                    />
+                                    </div>
+                                ) : type === 'file' ? (
+                                    <FileParamInput 
+                                    value={String(param.value)}
+                                    onChange={(val) => handleParamChange(param.id, val)}
+                                    enableUrl={param.enableUrlConversion !== false}
+                                    enableBase64={param.enableBase64Conversion !== false}
+                                    enableMulti={param.enableMultiFile !== false}
+                                    corsProxy={corsProxy}
+                                    />
+                                ) : (type === 'string' && param.enableMultiString) ? (
+                                    <StringArrayInput 
+                                        value={param.value} 
+                                        onChange={(val) => handleParamChange(param.id, val)}
+                                    />
+                                ) : (type === 'string') ? (
+                                    <textarea
+                                        value={String(param.value)}
+                                        onChange={(e) => handleParamChange(param.id, e.target.value)}
+                                        className="w-full text-sm text-slate-800 border border-gray-200 rounded p-1.5 focus:ring-1 focus:ring-indigo-500 outline-none transition-shadow resize-y min-h-[34px]"
+                                        placeholder="Value"
+                                        rows={1}
+                                    />
+                                ) : (
+                                <input
+                                    type={type === 'integer' || type === 'float' ? 'number' : 'text'}
+                                    step={type === 'float' ? 'any' : '1'}
+                                    value={String(param.value)}
+                                    onChange={(e) => {
+                                    let val: string | number = e.target.value;
+                                    if (type === 'integer') val = parseInt(e.target.value);
+                                    if (type === 'float') val = parseFloat(e.target.value);
+                                    // Handle NaN for empty input
+                                    if (typeof val === 'number' && isNaN(val)) val = 0; 
+                                    // If input is just text for number fields (like minus sign), keep as is to allow typing
+                                    if (e.target.value === '' || e.target.value === '-') val = e.target.value;
+                                    
+                                    handleParamChange(param.id, val);
+                                    }}
+                                    className="w-full text-sm text-slate-800 border border-gray-200 rounded p-1.5 focus:ring-1 focus:ring-indigo-500 outline-none transition-shadow h-[34px]"
+                                    placeholder="Value"
+                                />
+                                )}
+                            </>
+                        ) : (
+                            <div className="w-full border border-gray-200 rounded p-1.5 bg-gray-50 text-sm text-gray-400 h-[34px] flex items-center">
+                                <span className="truncate italic">Disabled</span>
+                            </div>
+                        )}
+
+                    </div>
+                    
+                    <div className="pt-7 shrink-0 flex items-center gap-1">
+                        <button
+                        onClick={() => setEditingParam(param)}
+                        className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+                        title={t.request.paramSettings}
+                        >
+                        <Settings size={16} />
+                        </button>
+                        <button
+                        onClick={() => handleDeleteParam(param.id)}
+                        className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                        title={t.request.deleteParam}
+                        >
+                        <Trash2 size={16} />
+                        </button>
+                    </div>
                   </div>
-                  
-                  <div className="pt-7 shrink-0 flex items-center gap-1">
-                    <button
-                      onClick={() => setEditingParam(param)}
-                      className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
-                      title={t.request.paramSettings}
-                    >
-                      <Settings size={16} />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteParam(param.id)}
-                      className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
-                      title={t.request.deleteParam}
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
+
+                  {param.description && (
+                      <div className="px-3 pb-3 pt-0 ml-8 text-xs text-gray-500 flex items-start gap-1.5">
+                          <Info size={12} className="mt-0.5 shrink-0 text-gray-400"/>
+                          {param.description}
+                      </div>
+                  )}
+
                 </div>
               );
             })}
