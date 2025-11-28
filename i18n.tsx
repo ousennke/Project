@@ -72,7 +72,7 @@ const translations = {
     },
     history: {
       title: "History",
-      sessionWarning: "Session Only",
+      sessionWarning: "Close page will clear cache.",
       clear: "Clear All",
       downloadZip: "Download ZIP",
       empty: "No history yet.",
@@ -231,7 +231,7 @@ const translations = {
     },
     confirmDialog: {
       keepCurrent: "No, keep current",
-      update: "Yes, Update",
+      update: "Yes, delete",
     }
   },
   zh: {
@@ -301,7 +301,7 @@ const translations = {
     },
     history: {
       title: "生成记录",
-      sessionWarning: "仅保存本次会话",
+      sessionWarning: "关闭页面会清空本次缓存",
       clear: "清空",
       downloadZip: "下载 ZIP",
       empty: "暂无历史记录",
@@ -459,8 +459,8 @@ const translations = {
       notFound: "未找到",
     },
     confirmDialog: {
-      keepCurrent: "No, keep current",
-      update: "Yes, Update",
+      keepCurrent: "否，继续保留",
+      update: "是，删除吧",
     }
   }
 };
